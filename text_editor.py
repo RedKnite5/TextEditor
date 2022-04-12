@@ -6,7 +6,7 @@ from tkinter import filedialog as FD
 
 from functools import partial
 from typing import Text
-from collections import deque
+from collections import deque, namedtuple
 from itertools import islice
 from string import printable
 
@@ -15,10 +15,26 @@ from string import printable
 # highlight current tab
 # highlight current line
 # cntrl-d to copy down
-# mouse
+# copy to clipboard
 # scrollbar
 
 
+Point = namedtuple('Point', ['x', 'y'])
+
+class Selection:
+    def __init__(self, startx=None, starty=None, endx=None, endy=None):
+        self.start = Point(startx, starty)
+        self.end = Point(endx, endy)
+
+    def __bool__(self):
+        return (None not in self.start) and (None not in self.end)
+    
+    @classmethod
+    def from_start(cls, x, y):
+        return cls(x, y)
+    
+    def from_end(self, x2, y2):
+        return self.__class__(self.start.x, self.start.y, x2, y2)
 
 
 class SliceDeque(deque):
@@ -128,45 +144,50 @@ class Tab:
         self.filename = filename
 
         w, h = root.winfo_width(), root.winfo_height()
-        print(w, h)
         self.canvas = tk.Canvas(self.root, width=w, height=h)
         self.canvas.grid(row=1, column=0, sticky="w")
         
+        self.highlight_color = "light blue"
+        self.text_color = "black"
         self.font_size = 12
         self.font = tkFont.Font(family="Courier", size=self.font_size)
         self.char_width = self.font.measure("A")
         self.char_height = self.font.metrics("linespace") + 1
+        self.x_offset = self.char_width
+        self.x_cursor_offset = self.x_offset - 2
+        self.y_offset = 5
 
+        self.selection = None
         self.canvas.focus_set()
         self.bindings()
         self.init_cursor()
 
     def init_cursor(self):
         self.canvas.create_line(
-            self.text.x + self.char_width - 2,        # x1
-            self.text.y + self.char_height,           # y1
-            self.text.x + self.char_width - 2,        # x2
-            self.text.y + 2 * self.char_height - 3,   # y2
+            self.text.x + self.x_cursor_offset,                     # x1
+            self.text.y + self.y_offset,                            # y1
+            self.text.x + self.x_cursor_offset,                     # x2
+            self.text.y + self.char_height + self.y_offset - 2,     # y2
             tag="cursor"
         )
 
     def update_cursor(self):
         self.canvas.moveto(
             "cursor",
-            (self.text.x + 1) * self.char_width - 2,
-            (self.text.y + 1) * self.char_height
+            self.text.x * self.char_width + self.x_cursor_offset,
+            self.text.y * self.char_height + self.y_offset
         )
     
     def update_line(self, line_number):
         self.canvas.delete(f"line_{line_number}")
         text = "".join(self.text[line_number]) if line_number < len(self.text) else ""
         self.canvas.create_text(
-            self.char_width,                         # x
-            self.char_height * (line_number + 1),    # y
+            self.x_offset,                                      # x
+            self.char_height * line_number + self.y_offset,     # y
             text=text,
             anchor='nw',
             font=self.font,
-            fill='black',
+            fill=self.text_color,
             tag=f"line_{line_number}"
         )
 
@@ -232,14 +253,67 @@ class Tab:
             for line_number in range(to_update[0], len(self.text)+1):
                 self.update_line(line_number)
 
+    def ctrl_c(self, event):
+        pass
+
     def mouse_press(self, event):
-        print("click")
+        x, y = self.move_cursor(event.x, event.y)
+        self.canvas.delete("selection")
+        self.selection = Selection.from_start(x, y)
+
+    def mouse_move(self, event):
+        x, y = self.move_cursor(event.x, event.y)
+        self.selection = self.selection.from_end(x, y)
+        self.highlight_selection(self.selection)
+
+    def move_cursor(self, xp, yp):
+        x = round((xp - self.x_offset) / self.char_width)
+        y = round((yp - self.y_offset - self.char_height / 2) / self.char_height)
+        
+        if y < 0:
+            y = 0
+        if x < 0:
+            x = 0
+        if y >= len(self.text):
+            y = len(self.text) - 1
+        if x > len(self.text[y]):
+            x = len(self.text[y])
+        self.text.x = x
+        self.text.y = y
+        self.update_cursor()
+        return x, y
+    
+    def highlight_selection(self, selection):
+        if selection.start.y > selection.end.y:
+            selection = Selection(*selection.end, *selection.start)
+        
+        self.canvas.delete("selection")
+
+        for line_number in range(selection.start.y, selection.end.y + 1):
+            y1 = line_number * self.char_height + self.y_offset
+            y2 = (line_number + 1) * self.char_height + self.y_offset
+            if line_number == selection.start.y:
+                x1 = selection.start.x * self.char_width + self.x_cursor_offset
+            else:
+                x1 = self.x_cursor_offset
+            if line_number == selection.end.y:
+                x2 = selection.end.x * self.char_width + self.x_cursor_offset
+            else:
+                x2 = len(self.text[line_number]) * self.char_width + self.x_cursor_offset
+
+            self.canvas.create_rectangle(
+                x1, y1,
+                x2, y2,
+                fill=self.highlight_color,
+                tag="selection"
+            )
+            self.canvas.lower("selection")
+
     
     def bindings(self):
         bind = self.canvas.bind
 
         bind("<Key>", self.key_press)
-        bind("<Button-1>", self.mouse_press)
         bind("<Return>", self.enter_key)
         bind("<BackSpace>", self.backspace)
         bind("<Delete>", self.delete)
@@ -248,13 +322,18 @@ class Tab:
         bind("<Up>", self.arrow("up"))
         bind("<Down>", self.arrow("down"))
 
+        bind("<Control-c>", self.ctrl_c)
+
+        bind("<Button-1>", self.mouse_press)
+        bind("<B1-Motion>", self.mouse_move)
+
 
 
 class TextEditor:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Text Editor")
-        self.window_shape = (400, 400)
+        self.window_shape = (500, 500)
         self.root.geometry("x".join(map(str, self.window_shape)))
 
         self.tab_buttons_fame = tk.Frame(self.root)
@@ -267,7 +346,6 @@ class TextEditor:
 
         self.bindings()
         self.init_menu()
-
 
     def create_tab(self, filename=None):
         tab = Tab(self.root, filename=filename)
@@ -286,14 +364,11 @@ class TextEditor:
             # this is the only way I could find to raise a canvas as canvas
             # overloaded it to raise drawn items instead of the canvas itself
             tk.Widget.lift(tab.canvas)
-
-            print(tab.canvas.winfo_geometry())
             
             self.current_tab = tab
             self.current_tab.canvas.focus_set()
             self.current_tab_button = self.tab_buttons[button_index]
         return select
-
 
     def init_menu(self):
         self.menu = tk.Menu(self.root)
@@ -321,7 +396,6 @@ class TextEditor:
         with open(fname, "w") as file:
             file.write(self.current_tab.text.get_text())
     
-
     def openfile(self, event=None):
         fname = FD.askopenfilename()
         if not fname:
@@ -340,14 +414,12 @@ class TextEditor:
         
         self.current_tab.init_cursor()
 
-
     def resize(self, event):
         if event.widget is self.root:
             if self.window_shape != (event.width, event.height):
                 self.window_shape = (event.width, event.height)
                 for tab in self.tabs:
                     tab.canvas.config(width = event.width, height = event.height)
-
 
     def bindings(self):
         bind = self.root.bind
@@ -357,7 +429,6 @@ class TextEditor:
         bind("<Control-o>", self.openfile)
 
         bind("<Configure>", self.resize)
-
 
     def mainloop(self):
         self.root.mainloop()
