@@ -117,8 +117,10 @@ class Tab:
 
         self.filename = filename
 
-        self.canvas = tk.Canvas(self.root, width=400, height=400)
-        self.canvas.grid(row=1, column=0)
+        w, h = root.winfo_width(), root.winfo_height()
+        print(w, h)
+        self.canvas = tk.Canvas(self.root, width=w, height=h)
+        self.canvas.grid(row=1, column=0, sticky="w")
         
         self.font_size = 12
         self.font = tkFont.Font(family="Courier", size=self.font_size)
@@ -175,8 +177,12 @@ class Tab:
                     self.text.y += 1
             elif direction == "up" and self.text.y > 0:           # still need to handle differnt length line switching
                 self.text.y -= 1
+                if self.text.x > len(self.text.current_line()):
+                    self.text.x = len(self.text.current_line())
             elif direction == "down" and self.text.y < len(self.text.lines) - 1:
                 self.text.y += 1
+                if self.text.x > len(self.text.current_line()):
+                    self.text.x = len(self.text.current_line())
             
             self.update_cursor()
         return arrow_press
@@ -263,10 +269,16 @@ class TextEditor:
         self.tabs.append(tab)
 
         return tab
-
     
     def select_tab(self, tab, button_index):
         def select():
+            #tab.canvas.lift() # doesn't work for this purpose
+            # this is the only way I could find to raise a canvas as canvas
+            # overloaded it to raise drawn items instead of the canvas itself
+            tk.Widget.lift(tab.canvas)
+
+            print(tab.canvas.winfo_geometry())
+            
             self.current_tab = tab
             self.current_tab.canvas.focus_set()
             self.current_tab_button = self.tab_buttons[button_index]
@@ -302,6 +314,8 @@ class TextEditor:
 
     def openfile(self, event=None):
         fname = FD.askopenfilename()
+        if not fname:
+            return
         if not (self.current_tab.filename is None and not self.current_tab.text.get_text()):
             self.current_tab = self.create_tab(filename=fname)
             self.current_tab_button = self.tab_buttons[0]
