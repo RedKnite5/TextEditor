@@ -10,6 +10,16 @@ from collections import deque
 from itertools import islice
 from string import printable
 
+# TODO:
+# create a new file
+# highlight current tab
+# highlight current line
+# cntrl-d to copy down
+# mouse
+# scrollbar
+
+
+
 
 class SliceDeque(deque):
     def __getitem__(self, index):
