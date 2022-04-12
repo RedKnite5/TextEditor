@@ -93,7 +93,21 @@ class TextArray:
             self.y -= 1
             self.x = length
             return (self.y, 2)
-        return (self.y, 0)
+        return (-1, 0)
+    
+    def delete(self):
+        if self.x < len(self.current_line()):
+            self.current_line().rotate(-self.x)
+            self.current_line().popleft()
+            self.current_line().rotate(self.x)
+            return (self.y, 1)
+        elif self.y < len(self.lines) - 1:
+            self.current_line().extend(self.lines[self.y + 1])
+            self.lines.rotate(-1 - self.y)
+            self.lines.popleft()
+            self.lines.rotate(self.y + 1)
+            return (self.y, 2)
+        return (-1, 0)
 
 
 class Tab:
@@ -192,7 +206,15 @@ class Tab:
                 self.update_line(line_number)
         
     def delete(self, event):
-        print("delete")
+        to_update = self.text.delete()
+        self.update_cursor()
+        if to_update[1] == 0:
+            return
+        elif to_update[1] == 1:
+            self.update_line(to_update[0])
+        else:
+            for line_number in range(to_update[0], len(self.text)+1):
+                self.update_line(line_number)
 
     def mouse_press(self, event):
         print("click")
@@ -216,7 +238,8 @@ class TextEditor:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Text Editor")
-        self.root.geometry("400x400")
+        self.window_shape = (400, 400)
+        self.root.geometry("x".join(map(str, self.window_shape)))
 
         self.tab_buttons_fame = tk.Frame(self.root)
         self.tab_buttons_fame.grid(row=0, column=0, sticky="w")
@@ -294,15 +317,22 @@ class TextEditor:
         self.current_tab.init_cursor()
 
 
+    def resize(self, event):
+        if event.widget is self.root:
+            if self.window_shape != (event.width, event.height):
+                self.window_shape = (event.width, event.height)
+                for tab in self.tabs:
+                    tab.canvas.config(width = event.width, height = event.height)
 
 
-    
     def bindings(self):
         bind = self.root.bind
 
         bind("<Control-s>", self.save)
         bind("<Control-S>", self.saveas)  # capital s
         bind("<Control-o>", self.openfile)
+
+        bind("<Configure>", self.resize)
 
 
     def mainloop(self):
