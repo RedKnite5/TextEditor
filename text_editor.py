@@ -14,12 +14,14 @@ from string import printable
 # create a new file
 # highlight current tab
 # highlight current line
-# cntrl-d to copy down
-# copy to clipboard
 # scrollbar
 
 
 Point = namedtuple('Point', ['x', 'y'])
+
+class DummyEvent:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
 
 class Selection:
     def __init__(self, startx=None, starty=None, endx=None, endy=None):
@@ -36,12 +38,14 @@ class Selection:
     def from_end(self, x2, y2):
         return self.__class__(self.start.x, self.start.y, x2, y2)
 
-
 class SliceDeque(deque):
     def __getitem__(self, index):
         if isinstance(index, slice):
             start = index.start or 0
-            stop = index.stop or len(self)
+            if index.stop is None:
+                stop = len(self)
+            else:
+                stop = index.stop
             step = index.step or 1
 
             self.rotate(-start)
@@ -50,6 +54,23 @@ class SliceDeque(deque):
             return cut
         else:
             return super().__getitem__(index)
+    
+    def __delitem__(self, index):
+        if isinstance(index, slice):
+            start = index.start or 0
+            if index.stop is None:
+                stop = len(self)
+            else:
+                stop = index.stop
+            step = index.step or 1
+            assert step == 1  # TODO: implement step
+
+            self.rotate(-start)
+            for i in range(stop-start):
+                self.popleft()
+            self.rotate(start)
+        else:
+            super().__delitem__(index)
 
 class Coordinate:
     def __init__(self, index):
@@ -60,7 +81,6 @@ class Coordinate:
     
     def __set__(self, instance, value):
         instance.cursor[self.index] = value
-
 
 class TextArray:
     x = Coordinate(0)
@@ -91,13 +111,15 @@ class TextArray:
         self.current_line().insert(self.x, char)
         self.x += 1
     
+    def duplicate_line(self):
+        self.lines.insert(self.y, SliceDeque(self.current_line()))
+        self.y += 1
+    
     def newline(self):
         remaining_text = ""
         if remaining_text := self.current_line()[self.x:]:
-            self.current_line().rotate(-self.x)
-            for i in range(len(remaining_text)):     # should do differently depending on which side of the line the cursor is closer to
-                self.current_line().popleft()
-            self.current_line().rotate(self.x)
+            # should do differently depending on which side of the line the cursor is closer to
+            del self.current_line()[self.x:self.x + len(remaining_text)]
         self.lines.insert(self.y + 1, SliceDeque(remaining_text))
         self.y += 1
         self.x = 0
@@ -105,17 +127,13 @@ class TextArray:
     def backspace(self) -> tuple[int]:
         # return (line number, 0|1|2) if 0, 1, or more than one line needs to be updated
         if self.x > 0:
-            self.current_line().rotate(1 - self.x)
-            self.current_line().popleft()
-            self.current_line().rotate(self.x - 1)
+            del self.current_line()[self.x - 1]
             self.x -= 1
             return (self.y, 1)
         elif self.y > 0:
             length = len(self.lines[self.y - 1])
             self.lines[self.y - 1].extend(self.current_line())
-            self.lines.rotate(-self.y)
-            self.lines.popleft()
-            self.lines.rotate(self.y)
+            del self.lines[self.y]
             self.y -= 1
             self.x = length
             return (self.y, 2)
@@ -123,15 +141,11 @@ class TextArray:
     
     def delete(self):
         if self.x < len(self.current_line()):
-            self.current_line().rotate(-self.x)
-            self.current_line().popleft()
-            self.current_line().rotate(self.x)
+            del self.current_line()[self.x]
             return (self.y, 1)
         elif self.y < len(self.lines) - 1:
             self.current_line().extend(self.lines[self.y + 1])
-            self.lines.rotate(-1 - self.y)
-            self.lines.popleft()
-            self.lines.rotate(self.y + 1)
+            del self.lines[self.y + 1]
             return (self.y, 2)
         return (-1, 0)
 
@@ -193,6 +207,7 @@ class Tab:
 
     def arrow(self, direction):
         def arrow_press(event):
+            self.selection = None
 
             if direction == "left":
                 if self.text.x > 0:
@@ -221,17 +236,28 @@ class Tab:
     def key_press(self, event):
         if not event.char or event.char not in printable:
             return
+        if self.selection:
+            self.delete_selection()
+            self.selection = None
+
         self.text.insert(event.char)
         self.update_line(self.text.y)
         self.update_cursor()
     
-    def enter_key(self, event):
+    def enter_key(self, event=None):
+        if self.selection:
+            self.delete_selection()
+            self.selection = None
         self.text.newline()
-        self.update_line(self.text.y - 1)
-        self.update_line(self.text.y)
+        for i in range(self.text.y - 1, len(self.text)):
+            self.update_line(i)
         self.update_cursor()
 
     def backspace(self, event):
+        if self.selection:
+            self.delete_selection()
+            self.selection = None
+            return
         to_update = self.text.backspace()
         self.update_cursor()
         if to_update[1] == 0:
@@ -242,9 +268,12 @@ class Tab:
             for line_number in range(to_update[0], len(self.text)+1):
                 self.update_line(line_number)
         
-    def delete(self, event):
+    def delete(self, event=None):
+        if self.selection:
+            self.delete_selection()
+            self.selection = None
+            return
         to_update = self.text.delete()
-        self.update_cursor()
         if to_update[1] == 0:
             return
         elif to_update[1] == 1:
@@ -252,9 +281,80 @@ class Tab:
         else:
             for line_number in range(to_update[0], len(self.text)+1):
                 self.update_line(line_number)
+    
+    def delete_selection(self):
+        if not self.selection:
+            return
+        
+        x1, y1 = self.selection.start
+        x2, y2 = self.selection.end
+
+        if y1 > y2:
+            x2, x1 = x1, x2
+            y2, y1 = y1, y2
+        elif y1 == y2 and x1 > x2:
+            x2, x1 = x1, x2
+
+        self.text.cursor = [x1, y1]
+        self.update_cursor()
+        self.selection = None
+        self.canvas.delete("selection")
+
+        if y1 == y2:
+            del self.text[y1][x1:x2] # possibly x1 + 1:x2
+            self.update_line(y1)
+            return
+        length = len(self.text)
+        new_y2 = y2
+        line_pops = y2 - y1 - 1
+        if line_pops:
+            del self.text.lines[y1 + 1:y2]
+            new_y2 -= line_pops
+        
+        del self.text[y1][x1:]
+        del self.text[new_y2][:x2]
+        self.delete()
+
+        for line_num in range(y1, length):
+            self.update_line(line_num)
 
     def ctrl_c(self, event):
-        pass
+        if self.selection:
+            s = ""
+            for line_number in range(self.selection.start.y, self.selection.end.y + 1):
+                if line_number == self.selection.start.y:
+                    start = self.selection.start.x
+                else:
+                    start = 0
+                if line_number == self.selection.end.y:
+                    end = self.selection.end.x
+                else:
+                    end = len(self.text[line_number])
+                s += "".join(self.text[line_number][start:end]) + "\n"
+            self.root.clipboard_clear()
+            self.root.clipboard_append(s[:-1])
+            self.root.update()
+    
+    def ctrl_v(self, event):
+        t = self.root.clipboard_get()
+        if not t:
+            if self.selection:
+                self.delete_selection()
+                self.selection = None
+            return
+        
+        for char in t:
+            if char == "\n":
+                self.enter_key()
+            else:
+                self.key_press(DummyEvent(char=char))
+
+    def ctrl_d(self, event):
+        self.text.duplicate_line()
+        for i in range(self.text.y - 1, len(self.text)):
+            self.update_line(i)
+        self.update_cursor()
+
 
     def mouse_press(self, event):
         x, y = self.move_cursor(event.x, event.y)
@@ -323,6 +423,8 @@ class Tab:
         bind("<Down>", self.arrow("down"))
 
         bind("<Control-c>", self.ctrl_c)
+        bind("<Control-v>", self.ctrl_v)
+        bind("<Control-d>", self.ctrl_d)
 
         bind("<Button-1>", self.mouse_press)
         bind("<B1-Motion>", self.mouse_move)
@@ -405,10 +507,11 @@ class TextEditor:
             self.current_tab_button = self.tab_buttons[0]
         else:
             self.current_tab_button.config(text=fname)
+            self.current_tab.filename = fname
 
         with open(fname, "r") as file:
             text = file.read()
-            self.current_tab.text.set_text(text)
+        self.current_tab.text.set_text(text)
         for line_number in range(len(self.current_tab.text)):
             self.current_tab.update_line(line_number)
         
