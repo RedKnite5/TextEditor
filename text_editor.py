@@ -1,20 +1,22 @@
 
-
 import tkinter as tk
+from tkinter import Tk, Frame, Button, Menu, Canvas
 import tkinter.font as tkFont
 from tkinter import filedialog as FD
 
-from functools import partial
-from typing import Text
 from collections import deque, namedtuple
 from itertools import islice
 from string import printable
 
 # TODO:
-# create a new file
-# highlight current tab
 # highlight current line
 # scrollbar
+# line numbers
+# dark theme
+# close tabs
+
+# blink cursor (not working)
+# variable character width (too hard)
 
 
 Point = namedtuple('Point', ['x', 'y'])
@@ -118,7 +120,7 @@ class TextArray:
     def newline(self):
         remaining_text = ""
         if remaining_text := self.current_line()[self.x:]:
-            # should do differently depending on which side of the line the cursor is closer to
+            # TODO: should do differently depending on which side of the line the cursor is closer to
             del self.current_line()[self.x:self.x + len(remaining_text)]
         self.lines.insert(self.y + 1, SliceDeque(remaining_text))
         self.y += 1
@@ -158,7 +160,7 @@ class Tab:
         self.filename = filename
 
         w, h = root.winfo_width(), root.winfo_height()
-        self.canvas = tk.Canvas(self.root, width=w, height=h)
+        self.canvas = Canvas(self.root, width=w, height=h)
         self.canvas.grid(row=1, column=0, sticky="w")
         
         self.highlight_color = "light blue"
@@ -167,7 +169,7 @@ class Tab:
         self.font = tkFont.Font(family="Courier", size=self.font_size)
         self.char_width = self.font.measure("A")
         self.char_height = self.font.metrics("linespace") + 1
-        self.x_offset = self.char_width
+        self.x_offset = 10
         self.x_cursor_offset = self.x_offset - 2
         self.y_offset = 5
 
@@ -178,12 +180,28 @@ class Tab:
 
     def init_cursor(self):
         self.canvas.create_line(
-            self.text.x + self.x_cursor_offset,                     # x1
-            self.text.y + self.y_offset,                            # y1
-            self.text.x + self.x_cursor_offset,                     # x2
-            self.text.y + self.char_height + self.y_offset - 2,     # y2
+            self.x_cursor_offset,                     # x1
+            self.y_offset,                            # y1
+            self.x_cursor_offset,                     # x2
+            self.char_height + self.y_offset - 2,     # y2
             tag="cursor"
         )
+        #self.cursor_shown = True
+        #self.canvas.after(500, self.toggle_cursor)
+    
+    """
+    def toggle_cursor(self):
+        print("toggle", not self.cursor_shown)
+        if self.cursor_shown:
+            self.canvas.itemconfig("cursor", state="hidden")
+        else:
+            self.canvas.itemconfig("cursor", state="normal")
+        
+        # cursor will move while hidden is strange ways if I dont do this
+        self.update_cursor()
+        self.cursor_shown = not self.cursor_shown
+        self.canvas.after(500, self.toggle_cursor)
+    """
 
     def update_cursor(self):
         self.canvas.moveto(
@@ -208,7 +226,8 @@ class Tab:
     def arrow(self, direction):
         def arrow_press(event):
             self.selection = None
-
+            self.canvas.delete("selection")
+            
             if direction == "left":
                 if self.text.x > 0:
                     self.text.x -= 1
@@ -238,7 +257,6 @@ class Tab:
             return
         if self.selection:
             self.delete_selection()
-            self.selection = None
 
         self.text.insert(event.char)
         self.update_line(self.text.y)
@@ -247,7 +265,6 @@ class Tab:
     def enter_key(self, event=None):
         if self.selection:
             self.delete_selection()
-            self.selection = None
         self.text.newline()
         for i in range(self.text.y - 1, len(self.text)):
             self.update_line(i)
@@ -256,7 +273,6 @@ class Tab:
     def backspace(self, event):
         if self.selection:
             self.delete_selection()
-            self.selection = None
             return
         to_update = self.text.backspace()
         self.update_cursor()
@@ -271,7 +287,6 @@ class Tab:
     def delete(self, event=None):
         if self.selection:
             self.delete_selection()
-            self.selection = None
             return
         to_update = self.text.delete()
         if to_update[1] == 0:
@@ -318,7 +333,7 @@ class Tab:
         for line_num in range(y1, length):
             self.update_line(line_num)
 
-    def ctrl_c(self, event):
+    def ctrl_c(self, event=None):
         if self.selection:
             s = ""
             for line_number in range(self.selection.start.y, self.selection.end.y + 1):
@@ -340,7 +355,6 @@ class Tab:
         if not t:
             if self.selection:
                 self.delete_selection()
-                self.selection = None
             return
         
         for char in t:
@@ -355,11 +369,20 @@ class Tab:
             self.update_line(i)
         self.update_cursor()
 
+    def ctrl_x(self, event):
+        self.ctrl_c()
+        self.delete_selection()
+
+    def ctrl_a(self, event):
+        self.selection = Selection(0, 0, len(self.text[-1]), len(self.text) - 1)
+        self.highlight_selection(self.selection)
 
     def mouse_press(self, event):
         x, y = self.move_cursor(event.x, event.y)
+        #self.toggle_cursor() # this is a for testing
         self.canvas.delete("selection")
         self.selection = Selection.from_start(x, y)
+
 
     def mouse_move(self, event):
         x, y = self.move_cursor(event.x, event.y)
@@ -425,26 +448,41 @@ class Tab:
         bind("<Control-c>", self.ctrl_c)
         bind("<Control-v>", self.ctrl_v)
         bind("<Control-d>", self.ctrl_d)
+        bind("<Control-x>", self.ctrl_x)
+        bind("<Control-a>", self.ctrl_a)
 
         bind("<Button-1>", self.mouse_press)
         bind("<B1-Motion>", self.mouse_move)
 
+class CurrentTab:
+    def __set_name__(self, instance, name):
+        self.name = name
 
+    def __set__(self, instance, value):
+        try:
+            instance.current_tab.button.config(bg="SystemButtonFace")   # default button color
+        except AttributeError:
+            pass
+        instance.__dict__[self.name] = value
+        instance.current_tab_button = value.button
+        value.canvas.focus_set()
+        value.button.config(bg="grey")
 
 class TextEditor:
+    current_tab = CurrentTab()
+
     def __init__(self):
-        self.root = tk.Tk()
+        self.root = Tk()
         self.root.title("Text Editor")
         self.window_shape = (500, 500)
         self.root.geometry("x".join(map(str, self.window_shape)))
 
-        self.tab_buttons_fame = tk.Frame(self.root)
+        self.tab_buttons_fame = Frame(self.root)
         self.tab_buttons_fame.grid(row=0, column=0, sticky="w")
 
         self.tabs = []
         self.tab_buttons = []
-        self.current_tab = self.create_tab()
-        self.current_tab_button = self.tab_buttons[0]
+        self.newfile()
 
         self.bindings()
         self.init_menu()
@@ -453,8 +491,9 @@ class TextEditor:
         tab = Tab(self.root, filename=filename)
 
         text = tab.filename if tab.filename else "untitled"
-        button = tk.Button(self.tab_buttons_fame, text=text, command=self.select_tab(tab, len(self.tabs)))
+        button = Button(self.tab_buttons_fame, text=text, command=self.select_tab(tab, len(self.tabs)))
         button.grid(row=0, column=len(self.tabs))
+        tab.button = button
         self.tab_buttons.append(button)
         self.tabs.append(tab)
 
@@ -468,14 +507,12 @@ class TextEditor:
             tk.Widget.lift(tab.canvas)
             
             self.current_tab = tab
-            self.current_tab.canvas.focus_set()
-            self.current_tab_button = self.tab_buttons[button_index]
         return select
 
     def init_menu(self):
-        self.menu = tk.Menu(self.root)
-        self.filemenu = tk.Menu(self.menu, tearoff=0)
-        #self.filemenu.add_command(label="New", command=donothing)
+        self.menu = Menu(self.root)
+        self.filemenu = Menu(self.menu, tearoff=0)
+        self.filemenu.add_command(label="New", command=self.newfile)
         self.filemenu.add_command(label="Open", command=self.openfile)
         self.filemenu.add_command(label="Save", command=self.save)
         self.filemenu.add_command(label="Save as", command=self.saveas)
@@ -504,7 +541,6 @@ class TextEditor:
             return
         if not (self.current_tab.filename is None and not self.current_tab.text.get_text()):
             self.current_tab = self.create_tab(filename=fname)
-            self.current_tab_button = self.tab_buttons[0]
         else:
             self.current_tab_button.config(text=fname)
             self.current_tab.filename = fname
@@ -516,6 +552,9 @@ class TextEditor:
             self.current_tab.update_line(line_number)
         
         self.current_tab.init_cursor()
+
+    def newfile(self, event=None):
+        self.current_tab = self.create_tab()
 
     def resize(self, event):
         if event.widget is self.root:
@@ -530,6 +569,7 @@ class TextEditor:
         bind("<Control-s>", self.save)
         bind("<Control-S>", self.saveas)  # capital s
         bind("<Control-o>", self.openfile)
+        bind("<Control-n>", self.newfile)
 
         bind("<Configure>", self.resize)
 
