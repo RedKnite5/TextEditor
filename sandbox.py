@@ -1,13 +1,18 @@
 
-
-class A:
-    def __getitem__(self, item):
-        print(item)
+import tkinter as tk
 
 
-a = A()
-a[1]
-a[:0]
-a[1:2]
-a[1:2:3]
-a[::2]
+def reset_grid(event=None):
+    canvas.grid_remove()
+    canvas.grid(row=0, column=1)
+
+root = tk.Tk()
+
+b = tk.Button(text="hello", command=reset_grid)
+b.grid(row=0, column=0)
+
+canvas = tk.Canvas(bg="blue")
+canvas.grid(row=0, column=1)
+
+
+root.mainloop()

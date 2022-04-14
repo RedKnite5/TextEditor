@@ -4,19 +4,25 @@ from tkinter import Tk, Frame, Button, Menu, Canvas
 import tkinter.font as tkFont
 from tkinter import filedialog as FD
 
+import time
+
 from collections import deque, namedtuple
 from itertools import islice
+from functools import partial
 from string import printable
 
 # TODO:
 # highlight current line
-# scrollbar
+# horizontal scrollbar
 # line numbers
 # dark theme
 # close tabs
 
 # blink cursor (not working)
 # variable character width (too hard)
+
+# ISSUES
+# new tabs cut off scrollbars
 
 
 Point = namedtuple('Point', ['x', 'y'])
@@ -159,11 +165,28 @@ class Tab:
 
         self.filename = filename
 
-        w, h = root.winfo_width(), root.winfo_height()
-        self.canvas = Canvas(self.root, width=w, height=h)
-        self.canvas.grid(row=1, column=0, sticky="w")
+        self.frame = tk.Frame(self.root)
+        self.canvas = Canvas(self.frame)
+        self.vbar = tk.Scrollbar(self.frame, orient="vertical", command=self.canvas.yview)
+        self.hbar = tk.Scrollbar(self.frame, orient="horizontal", command=self.canvas.xview)
+
+        self.frame.grid(row=1, column=0, sticky="w")
+        self.canvas.grid(row=0, column=0, sticky="w")
+        self.vbar.grid(row=0, column=1, sticky="nse")
+        self.hbar.grid(row=1, column=0, sticky="ews")
         
+        self.canvas.config(xscrollcommand=self.hbar.set, yscrollcommand=self.vbar.set)
+        self.canvas.config(scrollregion=self.canvas.bbox("all"))
+
         self.highlight_color = "light blue"
+        self.set_font_info()
+
+        self.selection = None
+        self.canvas.focus_set()
+        self.bindings()
+        self.init_cursor()
+    
+    def set_font_info(self):
         self.text_color = "black"
         self.font_size = 12
         self.font = tkFont.Font(family="Courier", size=self.font_size)
@@ -173,12 +196,9 @@ class Tab:
         self.x_cursor_offset = self.x_offset - 2
         self.y_offset = 5
 
-        self.selection = None
-        self.canvas.focus_set()
-        self.bindings()
-        self.init_cursor()
-
     def init_cursor(self):
+        #self.cursor_shown = True
+        #self.canvas.after(500, self.toggle_cursor)
         self.canvas.create_line(
             self.x_cursor_offset,                     # x1
             self.y_offset,                            # y1
@@ -186,8 +206,6 @@ class Tab:
             self.char_height + self.y_offset - 2,     # y2
             tag="cursor"
         )
-        #self.cursor_shown = True
-        #self.canvas.after(500, self.toggle_cursor)
     
     """
     def toggle_cursor(self):
@@ -209,6 +227,7 @@ class Tab:
             self.text.x * self.char_width + self.x_cursor_offset,
             self.text.y * self.char_height + self.y_offset
         )
+        self.canvas.config(scrollregion=self.canvas.bbox("all"))   # not entirely sure when this needs to happen
     
     def update_line(self, line_number):
         self.canvas.delete(f"line_{line_number}")
@@ -383,7 +402,6 @@ class Tab:
         self.canvas.delete("selection")
         self.selection = Selection.from_start(x, y)
 
-
     def mouse_move(self, event):
         x, y = self.move_cursor(event.x, event.y)
         self.selection = self.selection.from_end(x, y)
@@ -432,7 +450,6 @@ class Tab:
             )
             self.canvas.lower("selection")
 
-    
     def bindings(self):
         bind = self.canvas.bind
 
@@ -474,11 +491,16 @@ class TextEditor:
     def __init__(self):
         self.root = Tk()
         self.root.title("Text Editor")
-        self.window_shape = (500, 500)
+        self.window_shape = (500, 400)
         self.root.geometry("x".join(map(str, self.window_shape)))
 
         self.tab_buttons_fame = Frame(self.root)
         self.tab_buttons_fame.grid(row=0, column=0, sticky="w")
+
+        # very difficult to get these values dynamically
+        self.vbar_width = 17 #self.current_tab.vbar.winfo_width()
+        self.hbar_height = 17 #self.current_tab.hbar.winfo_height()
+        self.tab_buttons_height = 26 #self.tab_buttons_fame.winfo_height()
 
         self.tabs = []
         self.tab_buttons = []
@@ -497,14 +519,20 @@ class TextEditor:
         self.tab_buttons.append(button)
         self.tabs.append(tab)
 
+        self.resize_tab(tab)
+
         return tab
     
     def select_tab(self, tab, button_index):
         def select():
-            #tab.canvas.lift() # doesn't work for this purpose
+            # old code preserved for posterity
+            # tab.canvas.lift() # doesn't work for this purpose
             # this is the only way I could find to raise a canvas as canvas
             # overloaded it to raise drawn items instead of the canvas itself
-            tk.Widget.lift(tab.canvas)
+            #tk.Widget.lift(tab.canvas)
+
+            self.current_tab.frame.grid_remove()
+            tab.frame.grid()
             
             self.current_tab = tab
         return select
@@ -556,12 +584,21 @@ class TextEditor:
     def newfile(self, event=None):
         self.current_tab = self.create_tab()
 
-    def resize(self, event):
+    def on_resize(self, event):
         if event.widget is self.root:
             if self.window_shape != (event.width, event.height):
                 self.window_shape = (event.width, event.height)
                 for tab in self.tabs:
-                    tab.canvas.config(width = event.width, height = event.height)
+                    self.resize_tab(tab, event.width, event.height)
+
+
+    def resize_tab(self, tab, width=None, height=None):
+        if not width or not height:
+            width, height = self.window_shape
+        new_width = width - self.vbar_width
+        new_height = height - self.tab_buttons_height - self.hbar_height
+        tab.canvas.config(width = new_width, height = new_height)
+
 
     def bindings(self):
         bind = self.root.bind
@@ -571,7 +608,7 @@ class TextEditor:
         bind("<Control-o>", self.openfile)
         bind("<Control-n>", self.newfile)
 
-        bind("<Configure>", self.resize)
+        bind("<Configure>", self.on_resize)
 
     def mainloop(self):
         self.root.mainloop()
