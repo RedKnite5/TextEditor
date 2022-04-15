@@ -614,20 +614,18 @@ class TextEditor:
         fname = FD.askopenfilename()
         if not fname:
             return
-        if not (self.current_tab.filename is None and not self.current_tab.text.get_text()):
-            self.current_tab = self.create_tab(filename=fname)
-        else:
+        if self.current_tab.filename is None and not self.current_tab.text.get_text():
             self.current_tab_button.config(text=fname)
             self.current_tab.filename = fname
-            
+        else:
+            self.current_tab = self.create_tab(filename=fname)
 
         with open(fname, "r") as file:
             text = file.read()
         self.current_tab.text.set_text(text)
         for line_number in range(len(self.current_tab.text)):
             self.current_tab.update_line(line_number)
-        
-        self.current_tab.init_cursor()
+        self.current_tab.update_cursor()
 
     def newfile(self, event=None):
         self.current_tab = self.create_tab()

@@ -1,3 +1,5 @@
+sandbox.py
+
 # Test files
 *.txt
 
@@ -130,3 +132,5 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+sandbox.py
+sandbox.py
