@@ -179,7 +179,7 @@ class Tab:
         self.canvas.config(scrollregion=self.canvas.bbox("all"))
 
         self.highlight_color = "light blue"
-        self.linenumbers = True
+        self.linenumbers = False
         self.set_font_info()
 
         self.selection = None
@@ -651,7 +651,8 @@ class TextEditor:
         self.current_tab.text.set_text(text)
         for line_number in range(len(self.current_tab.text)):
             self.current_tab.update_line(line_number)
-            self.current_tab.create_line_number(line_number+1)
+            if self.current_tab.linenumbers:
+                self.current_tab.create_line_number(line_number+1)
         self.current_tab.update_cursor()
 
     def newfile(self, event=None):
