@@ -1,28 +1,28 @@
 
+
 import tkinter as tk
 from tkinter import Tk, Frame, Button, Menu, Canvas
 import tkinter.font as tkFont
 from tkinter import filedialog as FD
 
-import time
 
 from collections import deque, namedtuple
 from itertools import islice
-from functools import partial
 from string import printable
 
 # TODO:
 # highlight current line
-# horizontal scrollbar
 # line numbers
 # dark theme
 # close tabs
+# undo/redo
+# typing should scroll the screen horozontally
+# holding down keys can cause the screen not to update
 
 # blink cursor (not working)
 # variable character width (too hard)
 
-# ISSUES
-# new tabs cut off scrollbars
+# BUGS:
 
 
 Point = namedtuple('Point', ['x', 'y'])
@@ -221,11 +221,23 @@ class Tab:
         self.canvas.after(500, self.toggle_cursor)
     """
 
+    def position_to_pixels(self, cx=None, cy=None):
+        """Returns the position in pixels on the canvas of the top left
+        corner of the character specified by text.x and text.y"""
+
+        if cx is None:
+            cx = self.text.x
+        if cy is None:
+            cy = self.text.y
+
+        x = cx * self.char_width + self.x_cursor_offset
+        y = cy * self.char_height + self.y_offset
+        return (x, y)
+
     def update_cursor(self):
         self.canvas.moveto(
             "cursor",
-            self.text.x * self.char_width + self.x_cursor_offset,
-            self.text.y * self.char_height + self.y_offset
+            *self.position_to_pixels()
         )
         self.canvas.config(scrollregion=self.canvas.bbox("all"))   # not entirely sure when this needs to happen
     
@@ -259,7 +271,7 @@ class Tab:
                 elif self.text.y < len(self.text) - 1:
                     self.text.x = 0
                     self.text.y += 1
-            elif direction == "up" and self.text.y > 0:           # still need to handle differnt length line switching
+            elif direction == "up" and self.text.y > 0:
                 self.text.y -= 1
                 if self.text.x > len(self.text.current_line()):
                     self.text.x = len(self.text.current_line())
@@ -269,6 +281,10 @@ class Tab:
                     self.text.x = len(self.text.current_line())
             
             self.update_cursor()
+
+            self.scroll_to_see_cursor()
+
+            
         return arrow_press
 
     def key_press(self, event):
@@ -289,6 +305,8 @@ class Tab:
             self.update_line(i)
         self.update_cursor()
 
+        self.scroll_to_see_cursor()
+
     def backspace(self, event):
         if self.selection:
             self.delete_selection()
@@ -302,6 +320,7 @@ class Tab:
         else:
             for line_number in range(to_update[0], len(self.text)+1):
                 self.update_line(line_number)
+            self.scroll_to_see_cursor()
         
     def delete(self, event=None):
         if self.selection:
@@ -397,15 +416,42 @@ class Tab:
         self.highlight_selection(self.selection)
 
     def mouse_press(self, event):
-        x, y = self.move_cursor(event.x, event.y)
-        #self.toggle_cursor() # this is a for testing
+        cx, cy = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+        x, y = self.move_cursor(cx, cy)
         self.canvas.delete("selection")
         self.selection = Selection.from_start(x, y)
 
     def mouse_move(self, event):
-        x, y = self.move_cursor(event.x, event.y)
+        cx, cy = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+        x, y = self.move_cursor(cx, cy)
         self.selection = self.selection.from_end(x, y)
         self.highlight_selection(self.selection)
+    
+    def scrollwheel(self, event):
+        self.canvas.yview_scroll(-1*int(event.delta/120), "units")
+    
+    def scroll_to_see_cursor(self):
+        t, b = self.vbar.get()
+        can_height = self.canvas.bbox("all")[3]
+        top_of_screen = t * can_height
+        bottom_of_screen = b * can_height
+
+        percent_char_height = (self.char_height) / can_height
+        percent_height = self.vbar.get()[0]
+
+        #print(self.text.y * self.char_height + self.y_offset - self.canvas.canvasy(0))
+
+        if self.text.y * self.char_height + 2 * self.char_height + self.y_offset > bottom_of_screen:
+            # adding this sometimes makes it work better idk why
+            # - percent_height * percent_char_height
+            new_y = percent_height + percent_char_height
+
+            self.canvas.yview_moveto(new_y)\
+        
+        if self.text.y * self.char_height + self.y_offset < top_of_screen:
+            new_y = percent_height - percent_char_height
+
+            self.canvas.yview_moveto(new_y)
 
     def move_cursor(self, xp, yp):
         x = round((xp - self.x_offset) / self.char_width)
@@ -470,6 +516,8 @@ class Tab:
 
         bind("<Button-1>", self.mouse_press)
         bind("<B1-Motion>", self.mouse_move)
+        bind("<MouseWheel>", self.scrollwheel)
+
 
 class CurrentTab:
     def __set_name__(self, instance, name):
@@ -482,7 +530,6 @@ class CurrentTab:
             pass
         instance.__dict__[self.name] = value
         instance.current_tab_button = value.button
-        value.canvas.focus_set()
         value.button.config(bg="grey")
 
 class TextEditor:
@@ -572,6 +619,7 @@ class TextEditor:
         else:
             self.current_tab_button.config(text=fname)
             self.current_tab.filename = fname
+            
 
         with open(fname, "r") as file:
             text = file.read()
@@ -590,7 +638,6 @@ class TextEditor:
                 self.window_shape = (event.width, event.height)
                 for tab in self.tabs:
                     self.resize_tab(tab, event.width, event.height)
-
 
     def resize_tab(self, tab, width=None, height=None):
         if not width or not height:
