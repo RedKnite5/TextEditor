@@ -16,10 +16,13 @@ from string import printable
 # dark theme
 # close tabs
 # undo/redo
-# typing should scroll the screen horozontally
+# find/replace
+# edit menu (cut/copy/paste/find/replace/undo/redo)
 
+# INDEFINATE DELAY:
 # blink cursor (not working)
 # variable character width (too hard)
+# bind horizontal scrolling to horizontal scrollbar (no binding for horizontal scrolling on Windows)
 
 # BUGS:
 # holding down keys can cause the screen not to update
@@ -179,7 +182,7 @@ class Tab:
         self.canvas.config(scrollregion=self.canvas.bbox("all"))
 
         self.highlight_color = "light blue"
-        self.linenumbers = False
+        self.linenumbers = True
         self.set_font_info()
 
         self.selection = None
@@ -309,6 +312,7 @@ class Tab:
         self.text.insert(event.char)
         self.update_line(self.text.y)
         self.update_cursor()
+        self.scroll_to_see_cursor()
     
     def enter_key(self, event=None):
         if self.selection:
@@ -447,6 +451,7 @@ class Tab:
         self.canvas.delete("selection")
         self.selection = Selection.from_start(x, y)
 
+
     def mouse_move(self, event):
         cx, cy = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
         x, y = self.move_cursor(cx, cy)
@@ -458,26 +463,37 @@ class Tab:
     
     def scroll_to_see_cursor(self):
         t, b = self.vbar.get()
-        can_height = self.canvas.bbox("all")[3]
-        top_of_screen = t * can_height
-        bottom_of_screen = b * can_height
+        l, r = self.hbar.get()
+        can_height = int(self.canvas["height"])
+        can_width = int(self.canvas["width"])
+        boundingbox = self.canvas.bbox("all")
+        scrollable_height = boundingbox[3]
+        scrollable_width = boundingbox[2]
+        top_of_screen = t * scrollable_height
+        bottom_of_screen = b * scrollable_height
+        left_of_screen = l * scrollable_width
+        right_of_screen = r * scrollable_width
 
-        percent_char_height = (self.char_height) / can_height
-        percent_height = self.vbar.get()[0]
+        cursor_vpos = self.text.y * self.char_height + self.y_offset
+        cursor_hpos = self.text.x * self.char_width + self.x_offset
 
-        #print(self.text.y * self.char_height + self.y_offset - self.canvas.canvasy(0))
-
-        if self.text.y * self.char_height + 2 * self.char_height + self.y_offset > bottom_of_screen:
-            # adding this sometimes makes it work better idk why
-            # - percent_height * percent_char_height
-            new_y = percent_height + percent_char_height
-
-            self.canvas.yview_moveto(new_y)\
-        
-        if self.text.y * self.char_height + self.y_offset < top_of_screen:
-            new_y = percent_height - percent_char_height
-
+        if cursor_vpos + 2 * self.char_height > max(bottom_of_screen, can_height):
+            print("scroll down")
+            new_y = (cursor_vpos + self.char_height - can_height) / scrollable_height
             self.canvas.yview_moveto(new_y)
+        elif cursor_vpos < top_of_screen:
+            print("scroll up")
+            new_y = cursor_vpos / scrollable_height
+            self.canvas.yview_moveto(new_y)
+        
+        if cursor_hpos + self.char_width > max(right_of_screen, can_width):
+            print("scroll right")
+            new_x = (cursor_hpos + self.char_width - can_width) / scrollable_width
+            self.canvas.xview_moveto(new_x)
+        elif cursor_hpos < left_of_screen:
+            print("scroll left")
+            new_x = cursor_hpos / scrollable_width
+            self.canvas.xview_moveto(new_x)
 
     def move_cursor(self, xp, yp):
         x = round((xp - self.x_offset) / self.char_width)
