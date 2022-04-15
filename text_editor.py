@@ -27,6 +27,7 @@ from DataStructures import *
 # holding down keys can cause the screen not to update
 
 
+
 class DummyEvent:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
@@ -40,20 +41,20 @@ class Tab:
         self.filename = filename
 
         self.frame = tk.Frame(self.root)
-        self.canvas = Canvas(self.frame)
+        self.canvas = Canvas(self.frame, highlightthickness=0)
         self.vbar = tk.Scrollbar(self.frame, orient="vertical", command=self.canvas.yview)
         self.hbar = tk.Scrollbar(self.frame, orient="horizontal", command=self.canvas.xview)
 
         self.frame.grid(row=1, column=0, sticky="w")
-        self.canvas.grid(row=0, column=0, sticky="w")
-        self.vbar.grid(row=0, column=1, sticky="nse")
-        self.hbar.grid(row=1, column=0, sticky="ews")
+        self.canvas.grid(row=0, column=1, sticky="w")
+        self.vbar.grid(row=0, column=2, sticky="nse")
+        self.hbar.grid(row=1, column=0, columnspan=2, sticky="ews")
         
         self.canvas.config(xscrollcommand=self.hbar.set, yscrollcommand=self.vbar.set)
         self.canvas.config(scrollregion=self.canvas.bbox("all"))
 
-        self.highlight_color = "light blue"
         self.linenumbers = True
+        self.highlight_color = "light blue"
         self.set_font_info()
 
         self.selection = None
@@ -61,8 +62,18 @@ class Tab:
         self.bindings()
         self.init_cursor()
 
+        self.linenumber_canvas_width = 0
+
         if self.linenumbers:
+            self.linenumber_canvas_width = self.char_width * 5 + 4
+            self.linenumber_canvas = tk.Canvas(self.frame, width=self.linenumber_canvas_width)
+            self.linenumber_canvas.grid(row=0, column=0, sticky="w")
+
+            self.linenumber_canvas.config(xscrollcommand=self.hbar.set, yscrollcommand=self.vbar.set)
+            self.linenumber_canvas.config(scrollregion=self.linenumber_canvas.bbox("all"))
+
             self.create_line_number(1)
+        
     
     def set_font_info(self):
         self.text_color = "black"
@@ -72,10 +83,6 @@ class Tab:
         self.char_height = self.font.metrics("linespace") + 1
         self.x_offset = 10
         self.y_offset = 5
-
-        if self.linenumbers:
-            self.x_offset = self.char_width * 5 + 10
-        
         self.x_cursor_offset = self.x_offset - 2
 
 
@@ -104,11 +111,16 @@ class Tab:
         self.canvas.after(500, self.toggle_cursor)
     """
 
+    def yscroll_canvases(self, *args):
+        self.linenumber_canvas.yview(*args)
+        self.canvas.yview(*args)
+        
+
     def create_line_number(self, line_number):
-        self.canvas.create_text(
-            1,
+        self.linenumber_canvas.create_text(
+            2,
             (line_number - 1) * self.char_height + self.y_offset,
-            text=f"{line_number:>4}",
+            text=f"{line_number:>5}",
             tag="line_num_" + str(line_number),
             anchor="nw",
             font=self.font,
@@ -118,7 +130,7 @@ class Tab:
     def delete_line_number(self, line_number=None):
         if line_number is None:
             line_number = len(self.text) + 1
-        self.canvas.delete("line_num_" + str(line_number))
+        self.linenumber_canvas.delete("line_num_" + str(line_number))
 
     def update_cursor(self):
         self.canvas.moveto(
@@ -274,14 +286,23 @@ class Tab:
 
     def ctrl_c(self, event=None):
         if self.selection:
+            x1, y1 = self.selection.start
+            x2, y2 = self.selection.end
+
+            if y1 > y2:
+                x2, x1 = x1, x2
+                y2, y1 = y1, y2
+            elif y1 == y2 and x1 > x2:
+                x2, x1 = x1, x2
+
             s = ""
-            for line_number in range(self.selection.start.y, self.selection.end.y + 1):
-                if line_number == self.selection.start.y:
-                    start = self.selection.start.x
+            for line_number in range(y1, y2 + 1):
+                if line_number == y1:
+                    start = x1
                 else:
                     start = 0
-                if line_number == self.selection.end.y:
-                    end = self.selection.end.x
+                if line_number == y2:
+                    end = x2
                 else:
                     end = len(self.text[line_number])
                 s += "".join(self.text[line_number][start:end]) + "\n"
@@ -563,9 +584,11 @@ class TextEditor:
     def resize_tab(self, tab, width=None, height=None):
         if not width or not height:
             width, height = self.window_shape
-        new_width = width - self.vbar_width
+        new_width = width - self.vbar_width - tab.linenumber_canvas_width
         new_height = height - self.tab_buttons_height - self.hbar_height
         tab.canvas.config(width = new_width, height = new_height)
+        if tab.linenumbers:
+            tab.linenumber_canvas.config(height = new_height)
 
 
     def bindings(self):

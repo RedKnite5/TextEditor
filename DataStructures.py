@@ -39,6 +39,7 @@ class SliceDeque(deque):
             step = index.step or 1
 
             self.rotate(-start)
+            print("stop-start", stop-start)
             cut = list(islice(self, 0, stop-start, step))
             self.rotate(start)
             return cut
