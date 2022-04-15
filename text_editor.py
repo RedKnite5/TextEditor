@@ -17,12 +17,12 @@ from string import printable
 # close tabs
 # undo/redo
 # typing should scroll the screen horozontally
-# holding down keys can cause the screen not to update
 
 # blink cursor (not working)
 # variable character width (too hard)
 
 # BUGS:
+# holding down keys can cause the screen not to update
 
 
 Point = namedtuple('Point', ['x', 'y'])
@@ -179,12 +179,16 @@ class Tab:
         self.canvas.config(scrollregion=self.canvas.bbox("all"))
 
         self.highlight_color = "light blue"
+        self.linenumbers = True
         self.set_font_info()
 
         self.selection = None
         self.canvas.focus_set()
         self.bindings()
         self.init_cursor()
+
+        if self.linenumbers:
+            self.create_line_number(1)
     
     def set_font_info(self):
         self.text_color = "black"
@@ -193,8 +197,13 @@ class Tab:
         self.char_width = self.font.measure("A")
         self.char_height = self.font.metrics("linespace") + 1
         self.x_offset = 10
-        self.x_cursor_offset = self.x_offset - 2
         self.y_offset = 5
+
+        if self.linenumbers:
+            self.x_offset = self.char_width * 5 + 10
+        
+        self.x_cursor_offset = self.x_offset - 2
+
 
     def init_cursor(self):
         #self.cursor_shown = True
@@ -221,23 +230,27 @@ class Tab:
         self.canvas.after(500, self.toggle_cursor)
     """
 
-    def position_to_pixels(self, cx=None, cy=None):
-        """Returns the position in pixels on the canvas of the top left
-        corner of the character specified by text.x and text.y"""
-
-        if cx is None:
-            cx = self.text.x
-        if cy is None:
-            cy = self.text.y
-
-        x = cx * self.char_width + self.x_cursor_offset
-        y = cy * self.char_height + self.y_offset
-        return (x, y)
+    def create_line_number(self, line_number):
+        self.canvas.create_text(
+            1,
+            (line_number - 1) * self.char_height + self.y_offset,
+            text=f"{line_number:>4}",
+            tag="line_num_" + str(line_number),
+            anchor="nw",
+            font=self.font,
+            fill="light gray"
+        )
+    
+    def delete_line_number(self, line_number=None):
+        if line_number is None:
+            line_number = len(self.text) + 1
+        self.canvas.delete("line_num_" + str(line_number))
 
     def update_cursor(self):
         self.canvas.moveto(
             "cursor",
-            *self.position_to_pixels()
+            self.text.x * self.char_width + self.x_cursor_offset,
+            self.text.y * self.char_height + self.y_offset
         )
         self.canvas.config(scrollregion=self.canvas.bbox("all"))   # not entirely sure when this needs to happen
     
@@ -305,6 +318,9 @@ class Tab:
             self.update_line(i)
         self.update_cursor()
 
+        if self.linenumbers:
+            self.create_line_number(len(self.text))
+
         self.scroll_to_see_cursor()
 
     def backspace(self, event):
@@ -320,6 +336,8 @@ class Tab:
         else:
             for line_number in range(to_update[0], len(self.text)+1):
                 self.update_line(line_number)
+                if self.linenumbers:
+                    self.delete_line_number()
             self.scroll_to_see_cursor()
         
     def delete(self, event=None):
@@ -334,6 +352,8 @@ class Tab:
         else:
             for line_number in range(to_update[0], len(self.text)+1):
                 self.update_line(line_number)
+                if self.linenumbers:
+                    self.delete_line_number()
     
     def delete_selection(self):
         if not self.selection:
@@ -357,7 +377,8 @@ class Tab:
             del self.text[y1][x1:x2] # possibly x1 + 1:x2
             self.update_line(y1)
             return
-        length = len(self.text)
+        length = len(self.text)  
+
         new_y2 = y2
         line_pops = y2 - y1 - 1
         if line_pops:
@@ -368,8 +389,13 @@ class Tab:
         del self.text[new_y2][:x2]
         self.delete()
 
+        
         for line_num in range(y1, length):
             self.update_line(line_num)
+
+        if self.linenumbers:
+            for line_num in range(length - line_pops, length):
+                self.delete_line_number(line_num+1)
 
     def ctrl_c(self, event=None):
         if self.selection:
@@ -625,6 +651,7 @@ class TextEditor:
         self.current_tab.text.set_text(text)
         for line_number in range(len(self.current_tab.text)):
             self.current_tab.update_line(line_number)
+            self.current_tab.create_line_number(line_number+1)
         self.current_tab.update_cursor()
 
     def newfile(self, event=None):
