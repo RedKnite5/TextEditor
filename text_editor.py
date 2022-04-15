@@ -17,7 +17,8 @@ from string import printable
 # close tabs
 # undo/redo
 # find/replace
-# edit menu (cut/copy/paste/find/replace/undo/redo)
+# align text in menu labels
+
 
 # INDEFINATE DELAY:
 # blink cursor (not working)
@@ -418,7 +419,7 @@ class Tab:
             self.root.clipboard_append(s[:-1])
             self.root.update()
     
-    def ctrl_v(self, event):
+    def ctrl_v(self, event=None):
         t = self.root.clipboard_get()
         if not t:
             if self.selection:
@@ -431,17 +432,17 @@ class Tab:
             else:
                 self.key_press(DummyEvent(char=char))
 
-    def ctrl_d(self, event):
+    def ctrl_d(self, event=None):
         self.text.duplicate_line()
         for i in range(self.text.y - 1, len(self.text)):
             self.update_line(i)
         self.update_cursor()
 
-    def ctrl_x(self, event):
+    def ctrl_x(self, event=None):
         self.ctrl_c()
         self.delete_selection()
 
-    def ctrl_a(self, event):
+    def ctrl_a(self, event=None):
         self.selection = Selection(0, 0, len(self.text[-1]), len(self.text) - 1)
         self.highlight_selection(self.selection)
 
@@ -629,12 +630,21 @@ class TextEditor:
     def init_menu(self):
         self.menu = Menu(self.root)
         self.filemenu = Menu(self.menu, tearoff=0)
-        self.filemenu.add_command(label="New", command=self.newfile)
-        self.filemenu.add_command(label="Open", command=self.openfile)
-        self.filemenu.add_command(label="Save", command=self.save)
-        self.filemenu.add_command(label="Save as", command=self.saveas)
+        self.filemenu.add_command(label="New                 Ctrl+n", command=self.newfile)
+        self.filemenu.add_command(label="Open                Ctrl+o", command=self.openfile)
+        self.filemenu.add_command(label="Save                Ctrl+s", command=self.save)
+        self.filemenu.add_command(label="Save as       Ctrl+Shift+s", command=self.saveas)
         self.menu.add_cascade(label="File", menu=self.filemenu)
+
+        self.editmenu = Menu(self.menu, tearoff=0)
+        self.editmenu.add_command(label="Cut                 Ctrl-x", command=self.delegate_to_tab("ctrl_x"))
+        self.editmenu.add_command(label="Copy                Ctrl-c", command=self.delegate_to_tab("ctrl_c"))
+        self.editmenu.add_command(label="Paste               Ctrl-v", command=self.delegate_to_tab("ctrl_v"))
+        self.menu.add_cascade(label="Edit", menu=self.editmenu)
         self.root.config(menu=self.menu)
+    
+    def delegate_to_tab(self, method):
+        return lambda: getattr(self.current_tab, method)()
     
     def save(self, event=None):
         if not self.current_tab.filename:
