@@ -11,7 +11,6 @@ from DataStructures import *
 
 # TODO:
 # highlight current line
-# line numbers
 # dark theme
 # close tabs
 # undo/redo
@@ -322,7 +321,6 @@ class Tab:
         x, y = self.move_cursor(cx, cy)
         self.canvas.delete("selection")
         self.selection = Selection.from_start(x, y)
-
 
     def mouse_move(self, event):
         cx, cy = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
