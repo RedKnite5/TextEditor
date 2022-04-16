@@ -19,7 +19,6 @@ from DataStructures import *
 
 
 # INDEFINATE DELAY:
-# blink cursor (not working)
 # variable character width (too hard)
 # bind horizontal scrolling to horizontal scrollbar (no binding for horizontal scrolling on Windows)
 
@@ -88,8 +87,8 @@ class Tab:
         self.x_cursor_offset = self.x_offset - 2
 
     def init_cursor(self):
-        #self.cursor_shown = True
-        #self.canvas.after(500, self.toggle_cursor)
+        self.cursor_shown = True
+        self.canvas.after(500, self.toggle_cursor)
         self.canvas.create_line(
             self.x_cursor_offset,                     # x1
             self.y_offset,                            # y1
@@ -98,7 +97,7 @@ class Tab:
             tag="cursor"
         )
     
-    """
+    
     def toggle_cursor(self):
         print("toggle", not self.cursor_shown)
         if self.cursor_shown:
@@ -110,7 +109,7 @@ class Tab:
         self.update_cursor()
         self.cursor_shown = not self.cursor_shown
         self.canvas.after(500, self.toggle_cursor)
-    """
+    
 
     def yview_canvases(self, *args):
         self.canvas.yview(*args)
@@ -502,7 +501,11 @@ class TextEditor:
 
         text = tab.filename if tab.filename else "untitled"
         button = Button(self.tab_buttons_fame, text=text, command=self.select_tab(tab, len(self.tabs)))
+        close_button = Button(self.tab_buttons_fame, )
+
         button.grid(row=0, column=len(self.tabs))
+        close_button.grid(row=0, column=len(self.tabs))
+
         tab.button = button
         self.tab_buttons.append(button)
         self.tabs.append(tab)
@@ -524,6 +527,11 @@ class TextEditor:
             
             self.current_tab = tab
         return select
+    
+    def close_tab(self, tab, button_index):
+        def close():
+            pass
+        return close
 
     def init_menu(self):
         self.menu = Menu(self.root)
