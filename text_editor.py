@@ -40,41 +40,43 @@ class Tab:
 
         self.filename = filename
 
+        self.linenumbers = True
+        yview = self.yview_canvases if self.linenumbers else self.canvas.yview
+
         self.frame = tk.Frame(self.root)
         self.canvas = Canvas(self.frame, highlightthickness=0)
-        self.vbar = tk.Scrollbar(self.frame, orient="vertical", command=self.canvas.yview)
+        self.vbar = tk.Scrollbar(self.frame, orient="vertical", command=yview)
         self.hbar = tk.Scrollbar(self.frame, orient="horizontal", command=self.canvas.xview)
 
         self.frame.grid(row=1, column=0, sticky="w")
-        self.canvas.grid(row=0, column=1, sticky="w")
+        self.canvas.grid(row=0, column=1, sticky="news")
         self.vbar.grid(row=0, column=2, sticky="nse")
         self.hbar.grid(row=1, column=0, columnspan=2, sticky="ews")
         
         self.canvas.config(xscrollcommand=self.hbar.set, yscrollcommand=self.vbar.set)
         self.canvas.config(scrollregion=self.canvas.bbox("all"))
 
-        self.linenumbers = True
         self.highlight_color = "light blue"
         self.set_font_info()
 
         self.selection = None
         self.canvas.focus_set()
-        self.bindings()
         self.init_cursor()
 
         self.linenumber_canvas_width = 0
 
         if self.linenumbers:
             self.linenumber_canvas_width = self.char_width * 5 + 4
-            self.linenumber_canvas = tk.Canvas(self.frame, width=self.linenumber_canvas_width)
-            self.linenumber_canvas.grid(row=0, column=0, sticky="w")
-
-            self.linenumber_canvas.config(xscrollcommand=self.hbar.set, yscrollcommand=self.vbar.set)
-            self.linenumber_canvas.config(scrollregion=self.linenumber_canvas.bbox("all"))
-
+            self.linenumber_canvas = tk.Canvas(self.frame, width=self.linenumber_canvas_width, highlightthickness=0)
+            self.linenumber_canvas.grid(row=0, column=0, sticky="news")
             self.create_line_number(1)
+
+            #self.linenumber_canvas.config(xscrollcommand=self.hbar.set, yscrollcommand=self.vbar.set)
+            self.linenumber_canvas.config(scrollregion=self.linenumber_canvas.bbox("all"))
         
-    
+        self.bindings()
+        self.update_cursor()
+
     def set_font_info(self):
         self.text_color = "black"
         self.font_size = 12
@@ -84,7 +86,6 @@ class Tab:
         self.x_offset = 10
         self.y_offset = 5
         self.x_cursor_offset = self.x_offset - 2
-
 
     def init_cursor(self):
         #self.cursor_shown = True
@@ -111,10 +112,9 @@ class Tab:
         self.canvas.after(500, self.toggle_cursor)
     """
 
-    def yscroll_canvases(self, *args):
-        self.linenumber_canvas.yview(*args)
+    def yview_canvases(self, *args):
         self.canvas.yview(*args)
-        
+        self.linenumber_canvas.yview(*args)
 
     def create_line_number(self, line_number):
         self.linenumber_canvas.create_text(
@@ -139,6 +139,8 @@ class Tab:
             self.text.y * self.char_height + self.y_offset
         )
         self.canvas.config(scrollregion=self.canvas.bbox("all"))   # not entirely sure when this needs to happen
+        if self.linenumbers:
+            self.linenumber_canvas.config(scrollregion=self.linenumber_canvas.bbox("all"))
     
     def update_line(self, line_number):
         self.canvas.delete(f"line_{line_number}")
@@ -350,8 +352,12 @@ class Tab:
         self.highlight_selection(self.selection)
     
     def scrollwheel(self, event):
+        if self.vbar.get() == (0, 1):
+            return
         self.canvas.yview_scroll(-1*int(event.delta/120), "units")
-    
+        if self.linenumbers:
+            self.linenumber_canvas.yview_scroll(-1*int(event.delta/120), "units")
+
     def scroll_to_see_cursor(self):
         t, b = self.vbar.get()
         l, r = self.hbar.get()
@@ -450,6 +456,8 @@ class Tab:
         bind("<Button-1>", self.mouse_press)
         bind("<B1-Motion>", self.mouse_move)
         bind("<MouseWheel>", self.scrollwheel)
+        if self.linenumbers:
+            self.linenumber_canvas.bind("<MouseWheel>", self.scrollwheel)
 
 
 class CurrentTab:
@@ -589,7 +597,6 @@ class TextEditor:
         tab.canvas.config(width = new_width, height = new_height)
         if tab.linenumbers:
             tab.linenumber_canvas.config(height = new_height)
-
 
     def bindings(self):
         bind = self.root.bind
