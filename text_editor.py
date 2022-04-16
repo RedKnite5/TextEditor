@@ -1,7 +1,7 @@
 
 
 import tkinter as tk
-from tkinter import Tk, Frame, Button, Menu, Canvas
+from tkinter import Tk, Frame, Button, Menu, Canvas, Scrollbar
 import tkinter.font as tkFont
 from tkinter import filedialog as FD
 
@@ -44,8 +44,8 @@ class Tab:
 
 		self.frame = tk.Frame(self.root)
 		self.canvas = Canvas(self.frame, highlightthickness=0)
-		self.vbar = tk.Scrollbar(self.frame, orient="vertical", command=yview)
-		self.hbar = tk.Scrollbar(
+		self.vbar = Scrollbar(self.frame, orient="vertical", command=yview)
+		self.hbar = Scrollbar(
 			self.frame,
 			orient="horizontal",
 			command=self.canvas.xview
@@ -504,13 +504,42 @@ class TextEditor:
 		self.window_shape = (500, 400)
 		self.root.geometry("x".join(map(str, self.window_shape)))
 
-		self.tab_buttons_fame = Frame(self.root)
-		self.tab_buttons_fame.grid(row=0, column=0, sticky="w")
-
 		# very difficult to get these values dynamically
 		self.vbar_width = 17 #self.current_tab.vbar.winfo_width()
 		self.hbar_height = 17 #self.current_tab.hbar.winfo_height()
 		self.tab_buttons_height = 26 #self.tab_buttons_fame.winfo_height()
+
+		self.tab_buttons_fame = Frame(self.root)
+		self.tab_buttons_fame.grid(row=0, column=0, sticky="w")
+
+		self.scroll_tabs = Scrollbar(self.tab_buttons_fame, orient="horizontal")
+		self.tab_button_canvas = Canvas(
+			self.tab_buttons_fame,
+			height=self.tab_buttons_height,
+			bd=0,
+			bg="red",
+			highlightthickness=0,
+			xscrollcommand=self.scroll_tabs.set
+		)
+
+		self.scroll_tabs.config(command=self.tab_button_canvas.xview)
+
+		self.scroll_tabs.pack(side="right")
+		self.tab_button_canvas.pack(fill="x")
+
+		self.inner_frame = Frame(self.tab_button_canvas, height=self.tab_buttons_height)
+
+		self.tab_button_canvas.create_window(
+			(4, 4),
+			height=self.tab_buttons_height,
+			tags="window",
+			window=self.inner_frame
+		)
+
+		self.inner_frame.bind("<Configure>", self.on_button_mod)
+
+
+
 
 		self.tabs = {}
 		self.tab_buttons = {}
@@ -518,18 +547,21 @@ class TextEditor:
 
 		self.bindings()
 		self.init_menu()
+	
+	def on_button_mod(self, event):
+		self.tab_button_canvas.configure(scrollregion=self.tab_button_canvas.bbox("all"))
 
 	def create_tab(self, filename=None):
 		tab = Tab(self.root, filename=filename)
 
 		text = tab.filename if tab.filename else "untitled"
 		button = Button(
-			self.tab_buttons_fame,
+			self.inner_frame,
 			text=text,
 			command=self.select_tab(tab)
 		)
 		close_button = Button(
-			self.tab_buttons_fame,
+			self.inner_frame,
 			width=2,
 			text="X",
 			fg="red",
