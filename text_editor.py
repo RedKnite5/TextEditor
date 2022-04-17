@@ -527,7 +527,9 @@ class TextEditor:
 		self.scroll_tabs.pack(side="right", fill="x")
 		self.tab_button_canvas.pack(fill="x")
 
-		self.inner_frame = Frame(self.tab_button_canvas, height=self.tab_buttons_height)
+		self.inner_frame = Frame(
+			self.tab_button_canvas,
+		)
 
 		self.tab_button_canvas.create_window(
 			(4, 4),
