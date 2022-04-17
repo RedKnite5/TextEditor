@@ -15,10 +15,12 @@ from DataStructures import *
 # undo/redo
 # find/replace
 # align text in menu labels
+# variable character width
+# make tab key work
+# list filename, but not whole path
 
 
 # INDEFINATE DELAY:
-# variable character width (too hard)
 # bind horizontal scrolling to horizontal scrollbar (no binding for horizontal scrolling on Windows)
 
 # BUGS:
@@ -650,7 +652,7 @@ class TextEditor:
 		if not fname: # asksaveasfile return "" if dialog closed with "cancel".
 			return
 		self.current_tab.filename = fname
-		self.current_tab_button.config(text=fname)
+		self.current_tab_button.config(text=fname.split("/")[-1])
 		with open(fname, "w") as file:
 			file.write(self.current_tab.text.get_text())
 
@@ -659,7 +661,7 @@ class TextEditor:
 		if not fname:
 			return
 		if self.current_tab.filename is None and not self.current_tab.text.get_text():
-			self.current_tab_button.config(text=fname)
+			self.current_tab_button.config(text=fname.split("/")[-1])
 			self.current_tab.filename = fname
 		else:
 			self.current_tab = self.create_tab(filename=fname)
