@@ -15,7 +15,6 @@ from DataStructures import *
 # undo/redo
 # find/replace
 # align text in menu labels
-# scroll tab list
 
 
 # INDEFINATE DELAY:
