@@ -185,6 +185,8 @@ class Tab:
 
 		self.canvas.delete(f"line_{line_number}")
 		text = "".join(self.text[line_number]) if line_number < len(self.text) else ""
+		# Can't just use itemconfig because it needs to be drawn a first time
+		# Maybe if you add a check to see if it needs to be drawn
 		self.canvas.create_text(
 			self.x_offset,                                      # x
 			self.char_height * line_number + self.y_offset,     # y
@@ -278,6 +280,11 @@ class Tab:
 		self.scroll_to_see_cursor()
 
 	def enter_key(self, event=None):
+		"""Insert a newline into the TextArray
+
+		Also moves the cursor and updates the line and replaces any selected
+		text and draws a new line number."""
+
 		if self.selection:
 			self.delete_selection()
 		self.text.newline()
@@ -290,7 +297,13 @@ class Tab:
 
 		self.scroll_to_see_cursor()
 
-	def backspace(self, event):
+	def backspace(self, event=None):
+		"""Delete the character to the left of the cursor
+
+		Possibly delete a line if the cursor is at the beginning of a line or a
+		selection is something is selected. Also moves the cursor and redraws
+		the line."""
+
 		if self.selection:
 			self.delete_selection()
 			return
@@ -308,6 +321,11 @@ class Tab:
 			self.scroll_to_see_cursor()
 
 	def delete(self, event=None):
+		"""Delete the character to the right of the cursor
+
+		Possibly delete a line if the cursor is at the end of a line or
+		something is selected. Also moves the cursor and redraws the line."""
+
 		if self.selection:
 			self.delete_selection()
 			return
@@ -323,12 +341,15 @@ class Tab:
 					self.delete_line_number()
 
 	def delete_selection(self):
+		"""Delete the selected text"""
+
 		if not self.selection:
 			return
-		
+
 		x1, y1 = self.selection.start
 		x2, y2 = self.selection.end
 
+		# Swap beginning and end if necessary
 		if y1 > y2:
 			x2, x1 = x1, x2
 			y2, y1 = y1, y2
@@ -340,23 +361,22 @@ class Tab:
 		self.selection = None
 		self.canvas.delete("selection")
 
-		if y1 == y2:
-			del self.text[y1][x1:x2] # possibly x1 + 1:x2
+		if y1 == y2:  # if only deleting part of one line
+			del self.text[y1][x1:x2]
 			self.update_line(y1)
 			return
-		length = len(self.text)  
+		length = len(self.text)
 
 		new_y2 = y2
 		line_pops = y2 - y1 - 1
-		if line_pops:
+		if line_pops:   # delete lines that are being completly deleted
 			del self.text.lines[y1 + 1:y2]
 			new_y2 -= line_pops
-		
+
 		del self.text[y1][x1:]
 		del self.text[new_y2][:x2]
 		self.delete()
 
-		
 		for line_num in range(y1, length):
 			self.update_line(line_num)
 
@@ -365,6 +385,8 @@ class Tab:
 				self.delete_line_number(line_num+1)
 
 	def ctrl_c(self, event=None):
+		"""Copy the selected text to the clipboard"""
+
 		if self.selection:
 			x1, y1 = self.selection.start
 			x2, y2 = self.selection.end
@@ -391,45 +413,59 @@ class Tab:
 			self.root.update()
 
 	def ctrl_v(self, event=None):
+		"""Paste the text from the clipboard into the TextArray"""
+
 		t = self.root.clipboard_get()
 		if not t:
 			if self.selection:
 				self.delete_selection()
 			return
-		
-		for char in t:
+
+		for char in t:  # simulating keypresses
 			if char == "\n":
 				self.enter_key()
 			else:
 				self.key_press(DummyEvent(char=char))
 
 	def ctrl_d(self, event=None):
+		"""Duplicate the current line"""
+
 		self.text.duplicate_line()
 		for i in range(self.text.y - 1, len(self.text)):
 			self.update_line(i)
 		self.update_cursor()
 
 	def ctrl_x(self, event=None):
+		"""Cut the selected text to the clipboard"""
+
 		self.ctrl_c()
 		self.delete_selection()
 
 	def ctrl_a(self, event=None):
+		"""Select all text"""
+
 		self.selection = Selection(0, 0, len(self.text[-1]), len(self.text) - 1)
 		self.highlight_selection(self.selection)
 
 	def mouse_press(self, event):
+		"""Move the cursor and unselect any selected text"""
+
 		cx, cy = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
 		x, y = self.move_cursor(cx, cy)
 		self.canvas.delete("selection")
 		self.selection = Selection.from_start(x, y)
 
 	def mouse_move(self, event):
+		"""Move the cursor and select new text"""
+
 		cx, cy = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
 		x, y = self.move_cursor(cx, cy)
 		self.selection = self.selection.from_end(x, y)
 		self.highlight_selection(self.selection)
 
 	def scrollwheel(self, event):
+		"""Scroll the text up or down as well as linenumbers"""
+
 		if self.vbar.get() == (0, 1):
 			return
 		self.canvas.yview_scroll(-1*int(event.delta/120), "units")
@@ -437,6 +473,8 @@ class Tab:
 			self.linenumber_canvas.yview_scroll(-1*int(event.delta/120), "units")
 
 	def scroll_to_see_cursor(self):
+		"""Scroll the text so that the cursor is visible"""
+
 		t, b = self.vbar.get()
 		l, r = self.hbar.get()
 		can_height = int(self.canvas["height"])
@@ -452,6 +490,7 @@ class Tab:
 		cursor_vpos = self.text.y * self.char_height + self.y_offset
 		cursor_hpos = self.text.x * self.char_width + self.x_offset
 
+		# max prevents scrolling everytime the canvas bounding box expands
 		if cursor_vpos + 2 * self.char_height > max(bottom_of_screen, can_height):
 			new_y = (cursor_vpos + self.char_height - can_height) / scrollable_height
 			self.canvas.yview_moveto(new_y)
@@ -471,9 +510,12 @@ class Tab:
 			self.canvas.xview_moveto(new_x)
 
 	def move_cursor(self, xp, yp):
+		"""Convert canvas coordinates to TextArray coordinates and move the
+		TextArray cursor to the new position"""
+
 		x = round((xp - self.x_offset) / self.char_width)
 		y = round((yp - self.y_offset - self.char_height / 2) / self.char_height)
-		
+
 		if y < 0:
 			y = 0
 		if x < 0:
@@ -488,9 +530,11 @@ class Tab:
 		return x, y
 
 	def highlight_selection(self, selection):
+		"""Highlight the selected text"""
+
 		if selection.start.y > selection.end.y:
 			selection = Selection(*selection.end, *selection.start)
-		
+
 		self.canvas.delete("selection")
 
 		for line_number in range(selection.start.y, selection.end.y + 1):
@@ -514,6 +558,8 @@ class Tab:
 			self.canvas.lower("selection")
 
 	def bindings(self):
+		"""Bind the keys/events to the appropriate functions"""
+
 		bind = self.canvas.bind
 
 		bind("<Key>", self.key_press)
@@ -531,31 +577,51 @@ class Tab:
 		bind("<Control-x>", self.ctrl_x)
 		bind("<Control-a>", self.ctrl_a)
 
-		bind("<Button-1>", self.mouse_press)
-		bind("<B1-Motion>", self.mouse_move)
+		bind("<Button-1>", self.mouse_press)  # left click
+		bind("<B1-Motion>", self.mouse_move)  # drag mouse while left click
 		bind("<MouseWheel>", self.scrollwheel)
 		if self.linenumbers:
 			self.linenumber_canvas.bind("<MouseWheel>", self.scrollwheel)
 
 	def destroy_widgets(self):
+		"""Destroy all widgets belonging to the tab"""
+
 		self.frame.destroy()
 		# must destroy widgets before tag object can be garbage collected
 		self.canvas.destroy()
-		self.linenumber_canvas.destroy()
 		self.vbar.destroy()
 		self.hbar.destroy()
+		if self.linenumbers:
+			self.linenumber_canvas.destroy()
 
 
 class CurrentTab:
+	"""Class to do things that need to be done every time the current tab is
+	changed"""
+
 	def __set_name__(self, instance, name):
+		"""Set the variable name the current tab is given
+		(expected to be "current_tab")"""
+
 		self.name = name
 
 	def __set__(self, instance, value):
+		"""Set the current tab
+
+		Set the color of previous tab button to the default color, set the
+		current tab button to the selected color and the current_tab_button
+		attribute to the tab button that was just pressed.
+
+		Args:
+			instance (TextEditor): The TextEditor instance
+			value (Tab): The tab that is being selected
+		"""
+
 		try:
 			if instance.current_tab.button.winfo_exists():
 				instance.current_tab.button.config(bg="SystemButtonFace")   # default button color
 				instance.current_tab.close_button.config(bg="SystemButtonFace")
-		except AttributeError:
+		except AttributeError:  # if the current tab is None
 			pass
 		instance.__dict__[self.name] = value
 		instance.current_tab_button = value.button
@@ -564,6 +630,8 @@ class CurrentTab:
 		value.canvas.focus_set()
 
 class TextEditor:
+	"""Main class that creates the GUI and contains the TextArray"""
+
 	current_tab = CurrentTab()
 
 	def __init__(self):
@@ -572,15 +640,16 @@ class TextEditor:
 		self.window_shape = (500, 400)
 		self.root.geometry("x".join(map(str, self.window_shape)))
 
-		# very difficult to get these values dynamically
+		# very difficult to get these values dynamically. They are 1 if looked
+		# up with the relevant methods too early. So I just hardcode them.
 		self.vbar_width = 17 #self.current_tab.vbar.winfo_width()
 		self.hbar_height = 17 #self.current_tab.hbar.winfo_height()
 		self.tab_buttons_height = 26 #self.tab_buttons_fame.winfo_height()
 
 		self.tab_row_creation()
 
-		self.tabs = {}
-		self.tab_buttons = {}
+		self.tabs = {}          # id(selection button): Tab
+		self.tab_buttons = {}   # id(selection button): (selection button, close_button)
 		self.newfile()
 
 		self.bindings()
@@ -588,7 +657,7 @@ class TextEditor:
 
 	def tab_row_creation(self):
 		"""Create widgets related to displaying and controlling the different
-		tabs that are open"""
+		tabs and tab buttons that are open"""
 
 		self.tab_buttons_fame = Frame(self.root)
 		self.tab_buttons_fame.grid(row=0, column=0, sticky="we")
@@ -628,6 +697,8 @@ class TextEditor:
 		self.tab_button_canvas.configure(scrollregion=self.tab_button_canvas.bbox("all"))
 
 	def create_tab(self, filename=None):
+		"""Create a new tab and is widgets and add it to the list of tabs"""
+
 		tab = Tab(self.root, filename=filename)
 
 		text = tab.filename if tab.filename else "untitled"
@@ -661,6 +732,8 @@ class TextEditor:
 
 	def select_tab(self, tab):
 		def select():
+			"""Set the new current tab and display the new tab's text"""
+
 			# old code preserved for posterity
 			# tab.canvas.lift() # doesn't work for this purpose
 			# this is the only way I could find to raise a canvas as canvas

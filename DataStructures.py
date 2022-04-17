@@ -19,6 +19,8 @@ class Selection:
 		self.end = Point(endx, endy)
 
 	def __bool__(self):
+		"""Return False if all four coordinates are not set"""
+
 		return (None not in self.start) and (None not in self.end)
 
 	@classmethod
