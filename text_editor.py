@@ -80,7 +80,6 @@ class Tab:
 			self.linenumber_canvas.grid(row=0, column=0, sticky="news")
 			self.create_line_number(1)
 
-			#self.linenumber_canvas.config(xscrollcommand=self.hbar.set, yscrollcommand=self.vbar.set)
 			self.linenumber_canvas.config(
 				scrollregion=self.linenumber_canvas.bbox("all")
 			)
@@ -509,6 +508,19 @@ class TextEditor:
 		self.hbar_height = 17 #self.current_tab.hbar.winfo_height()
 		self.tab_buttons_height = 26 #self.tab_buttons_fame.winfo_height()
 
+		self.tab_row_creation()
+
+		self.tabs = {}
+		self.tab_buttons = {}
+		self.newfile()
+
+		self.bindings()
+		self.init_menu()
+
+	def tab_row_creation(self):
+		"""Create widgets related to displaying and controlling the different
+		tabs that are open"""
+
 		self.tab_buttons_fame = Frame(self.root)
 		self.tab_buttons_fame.grid(row=0, column=0, sticky="we")
 
@@ -516,7 +528,6 @@ class TextEditor:
 		self.tab_button_canvas = Canvas(
 			self.tab_buttons_fame,
 			height=self.tab_buttons_height,
-			#bd=0,
 			xscrollcommand=self.scroll_tabs.set
 		)
 
@@ -539,14 +550,12 @@ class TextEditor:
 
 		self.inner_frame.bind("<Configure>", self.on_button_mod)
 
-		self.tabs = {}
-		self.tab_buttons = {}
-		self.newfile()
-
-		self.bindings()
-		self.init_menu()
-
 	def on_button_mod(self, event=None):
+		"""Reisize the scrollable region of the canvas holding tab buttons
+		when the inner_frame is resized aka when a button is added or removed
+		so that it becomes scrollable when too many tabs to fit in the window
+		are open."""
+
 		self.tab_button_canvas.configure(scrollregion=self.tab_button_canvas.bbox("all"))
 
 	def create_tab(self, filename=None):
