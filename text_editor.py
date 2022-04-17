@@ -518,7 +518,8 @@ class TextEditor:
 			self.tab_buttons_fame,
 			height=self.tab_buttons_height,
 			bd=0,
-			highlightthickness=0,
+			#highlightthickness=0,
+			bg="red",
 			xscrollcommand=self.scroll_tabs.set
 		)
 
@@ -528,20 +529,18 @@ class TextEditor:
 		self.tab_button_canvas.pack(fill="x")
 
 		self.inner_frame = Frame(
-			self.tab_button_canvas,
+			self.tab_button_canvas
 		)
 
-		self.tab_button_canvas.create_window(
-			(4, 4),
+		self.windowID = self.tab_button_canvas.create_window(
+			(0, 0),
+			anchor="nw",
 			height=self.tab_buttons_height,
 			tags="window",
 			window=self.inner_frame
 		)
 
 		self.inner_frame.bind("<Configure>", self.on_button_mod)
-
-
-
 
 		self.tabs = {}
 		self.tab_buttons = {}
@@ -550,7 +549,7 @@ class TextEditor:
 		self.bindings()
 		self.init_menu()
 
-	def on_button_mod(self, event):
+	def on_button_mod(self, event=None):
 		self.tab_button_canvas.configure(scrollregion=self.tab_button_canvas.bbox("all"))
 
 	def create_tab(self, filename=None):
@@ -570,8 +569,6 @@ class TextEditor:
 			command=self.close_tab(tab, id(button))
 		)
 
-		#button.grid(row=0, column=2 * len(self.tabs))
-		#close_button.grid(row=0, column=1 + 2 * len(self.tabs))
 		button.pack(side="left")
 		close_button.pack(side="left")
 
@@ -603,10 +600,11 @@ class TextEditor:
 
 	def close_tab(self, tab, button_id):
 		def close():
-			self.tab_buttons[button_id][0].grid_forget()
-			self.tab_buttons[button_id][1].grid_forget()
-			self.tab_buttons[button_id][0].destroy()
-			self.tab_buttons[button_id][1].destroy()
+			buttons = self.tab_buttons[button_id]
+			buttons[0].pack_forget()
+			buttons[1].pack_forget()
+			buttons[0].destroy()
+			buttons[1].destroy()
 			del self.tab_buttons[button_id]
 			tab.destroy_widgets()
 			del self.tabs[button_id]
@@ -616,9 +614,7 @@ class TextEditor:
 					next_tab = tuple(self.tabs.values())[0]
 					next_tab.frame.grid()
 					self.current_tab = next_tab
-					#del self.tabs[button_id]
 				else:
-					#del self.tabs[button_id]
 					self.newfile()
 
 		return close
