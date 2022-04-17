@@ -518,7 +518,6 @@ class TextEditor:
 			self.tab_buttons_fame,
 			height=self.tab_buttons_height,
 			bd=0,
-			bg="red",
 			highlightthickness=0,
 			xscrollcommand=self.scroll_tabs.set
 		)
