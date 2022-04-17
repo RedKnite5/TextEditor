@@ -1,6 +1,6 @@
 
 
-import tkinter as tk
+#import tkinter as tk
 from tkinter import Tk, Frame, Button, Menu, Canvas, Scrollbar
 import tkinter.font as tkFont
 from tkinter import filedialog as FD
@@ -17,7 +17,6 @@ from DataStructures import *
 # align text in menu labels
 # variable character width
 # make tab key work
-# list filename, but not whole path
 
 
 # INDEFINATE DELAY:
