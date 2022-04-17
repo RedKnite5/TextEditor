@@ -510,7 +510,7 @@ class TextEditor:
 		self.tab_buttons_height = 26 #self.tab_buttons_fame.winfo_height()
 
 		self.tab_buttons_fame = Frame(self.root)
-		self.tab_buttons_fame.grid(row=0, column=0, sticky="w")
+		self.tab_buttons_fame.grid(row=0, column=0, sticky="we")
 
 		self.scroll_tabs = Scrollbar(self.tab_buttons_fame, orient="horizontal")
 		self.tab_button_canvas = Canvas(
@@ -524,7 +524,7 @@ class TextEditor:
 
 		self.scroll_tabs.config(command=self.tab_button_canvas.xview)
 
-		self.scroll_tabs.pack(side="right")
+		self.scroll_tabs.pack(side="right", fill="x")
 		self.tab_button_canvas.pack(fill="x")
 
 		self.inner_frame = Frame(self.tab_button_canvas, height=self.tab_buttons_height)
@@ -547,7 +547,7 @@ class TextEditor:
 
 		self.bindings()
 		self.init_menu()
-	
+
 	def on_button_mod(self, event):
 		self.tab_button_canvas.configure(scrollregion=self.tab_button_canvas.bbox("all"))
 
