@@ -385,20 +385,20 @@ class Tab:
 		cursor_hpos = self.text.x * self.char_width + self.x_offset
 
 		if cursor_vpos + 2 * self.char_height > max(bottom_of_screen, can_height):
-			print("scroll down")
 			new_y = (cursor_vpos + self.char_height - can_height) / scrollable_height
 			self.canvas.yview_moveto(new_y)
+			if self.linenumbers:
+				self.linenumber_canvas.yview_moveto(new_y)
 		elif cursor_vpos < top_of_screen:
-			print("scroll up")
 			new_y = cursor_vpos / scrollable_height
 			self.canvas.yview_moveto(new_y)
+			if self.linenumbers:
+				self.linenumber_canvas.yview_moveto(new_y)
 		
 		if cursor_hpos + self.char_width > max(right_of_screen, can_width):
-			print("scroll right")
 			new_x = (cursor_hpos + self.char_width - can_width) / scrollable_width
 			self.canvas.xview_moveto(new_x)
 		elif cursor_hpos < left_of_screen:
-			print("scroll left")
 			new_x = cursor_hpos / scrollable_width
 			self.canvas.xview_moveto(new_x)
 
@@ -516,15 +516,13 @@ class TextEditor:
 		self.tab_button_canvas = Canvas(
 			self.tab_buttons_fame,
 			height=self.tab_buttons_height,
-			bd=0,
-			#highlightthickness=0,
-			bg="red",
+			#bd=0,
 			xscrollcommand=self.scroll_tabs.set
 		)
 
 		self.scroll_tabs.config(command=self.tab_button_canvas.xview)
 
-		self.scroll_tabs.pack(side="right", fill="x")
+		self.scroll_tabs.pack(side="right", fill="y")
 		self.tab_button_canvas.pack(fill="x")
 
 		self.inner_frame = Frame(
