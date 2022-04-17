@@ -16,6 +16,7 @@ from DataStructures import *
 # align text in menu labels
 # variable character width
 # make tab key work
+# dont have cursor toggled of while typing
 
 
 # INDEFINATE DELAY:
@@ -27,7 +28,12 @@ from DataStructures import *
 
 
 class DummyEvent:
+	"""Class to mimic events for fuctions that are bound to an event and
+	are called independently"""
+
 	def __init__(self, **kwargs):
+		"""Set all keyword arguments to instance variables"""
+
 		self.__dict__.update(kwargs)
 
 
@@ -88,6 +94,8 @@ class Tab:
 		self.update_cursor()
 
 	def set_font_info(self):
+		"""Set infomation about the font and cursor location"""
+
 		self.text_color = "black"
 		self.font_size = 12
 		self.font = tkFont.Font(family="Courier", size=self.font_size)
@@ -98,6 +106,9 @@ class Tab:
 		self.x_cursor_offset = self.x_offset - 2
 
 	def init_cursor(self):
+		"""Create the cursor so that it can be moved later and start toggling
+		it"""
+
 		self.cursor_shown = True
 		self.canvas.after(500, self.toggle_cursor)
 		self.canvas.create_line(
@@ -109,6 +120,10 @@ class Tab:
 		)
 
 	def toggle_cursor(self):
+		"""Toggle whether the cursor is shown or not.
+		
+		After that schedual this function to be called again."""
+
 		if self.cursor_shown:
 			self.canvas.itemconfig("cursor", state="hidden")
 		else:
@@ -120,10 +135,15 @@ class Tab:
 		self.canvas.after(500, self.toggle_cursor)
 
 	def yview_canvases(self, *args):
+		"""A wrapper for the canvas.yview and linenumber_canvas methods
+		so that they can be bound to the same scrollbar"""
+
 		self.canvas.yview(*args)
 		self.linenumber_canvas.yview(*args)
 
 	def create_line_number(self, line_number):
+		"""Create a line number on the line number canvas"""
+
 		self.linenumber_canvas.create_text(
 			2,
 			(line_number - 1) * self.char_height + self.y_offset,
@@ -135,11 +155,20 @@ class Tab:
 		)
 
 	def delete_line_number(self, line_number=None):
+		"""Delete a line number from the line number canvas.
+		
+		Defaults to the line number corosponding to the end of the TextArray
+		if multiple lines have been deleted simultaniously this may not be the
+		last line number."""
+
 		if line_number is None:
 			line_number = len(self.text) + 1
 		self.linenumber_canvas.delete("line_num_" + str(line_number))
 
 	def update_cursor(self):
+		"""Move the cursor to the position specified by the TextArray.
+		
+		Also set the scrollregion of the canvases to the size of the text."""
 		self.canvas.moveto(
 			"cursor",
 			self.text.x * self.char_width + self.x_cursor_offset,
@@ -152,6 +181,8 @@ class Tab:
 			)
 
 	def update_line(self, line_number):
+		"""Draw the text on the canvas for a specific line"""
+
 		self.canvas.delete(f"line_{line_number}")
 		text = "".join(self.text[line_number]) if line_number < len(self.text) else ""
 		self.canvas.create_text(
@@ -165,39 +196,77 @@ class Tab:
 		)
 
 	def arrow(self, direction):
-		def arrow_press(event):
-			self.selection = None
-			self.canvas.delete("selection")
-			
-			if direction == "left":
+		"""Factory for arrow event fuctions"""
+
+		if direction == "up":
+			def up(event):
+				"""Move the cursor up"""
+
+				self.selection = None
+				self.canvas.delete("selection")
+				if self.text.y <= 0:
+					return
+				self.text.y -= 1
+				if self.text.x > len(self.text.current_line()):
+					self.text.x = len(self.text.current_line())
+
+				self.update_cursor()
+				self.scroll_to_see_cursor()
+			return up
+		elif direction == "down":
+			def down(event):
+				"""Move the cursor down"""
+
+				self.selection = None
+				self.canvas.delete("selection")
+				if self.text.y >= len(self.text.lines) - 1:
+					return
+				self.text.y += 1
+				if self.text.x > len(self.text.current_line()):
+					self.text.x = len(self.text.current_line())
+
+				self.update_cursor()
+				self.scroll_to_see_cursor()
+			return down
+		elif direction == "left":
+			def left(event):
+				"""Move the cursor left"""
+
+				self.selection = None
+				self.canvas.delete("selection")
 				if self.text.x > 0:
 					self.text.x -= 1
 				elif self.text.y > 0:
 					self.text.y -= 1
 					self.text.x = len(self.text.current_line())
-			elif direction == "right":
+
+				self.update_cursor()
+				self.scroll_to_see_cursor()
+			return left
+		elif direction == "right":
+			def right(event):
+				"""Move the cursor right"""
+
+				self.selection = None
+				self.canvas.delete("selection")
 				if self.text.x < len(self.text.current_line()):
 					self.text.x += 1
 				elif self.text.y < len(self.text) - 1:
 					self.text.x = 0
 					self.text.y += 1
-			elif direction == "up" and self.text.y > 0:
-				self.text.y -= 1
-				if self.text.x > len(self.text.current_line()):
-					self.text.x = len(self.text.current_line())
-			elif direction == "down" and self.text.y < len(self.text.lines) - 1:
-				self.text.y += 1
-				if self.text.x > len(self.text.current_line()):
-					self.text.x = len(self.text.current_line())
-			
-			self.update_cursor()
 
-			self.scroll_to_see_cursor()
-
-			
-		return arrow_press
+				self.update_cursor()
+				self.scroll_to_see_cursor()
+			return right
+		else:
+			raise ValueError(f"{direction} is not a valid direction")
 
 	def key_press(self, event):
+		"""Insert a character into the text
+		
+		Also moves the cursor and updates the line and replaces any selected
+		text."""
+
 		if not event.char or event.char not in printable:
 			return
 		if self.selection:
