@@ -494,6 +494,7 @@ class CurrentTab:
 		instance.current_tab_button = value.button
 		value.button.config(bg="grey")
 		value.close_button.config(bg="grey")
+		value.canvas.focus_set()
 
 class TextEditor:
 	current_tab = CurrentTab()
@@ -563,7 +564,7 @@ class TextEditor:
 
 			self.current_tab.frame.grid_remove()
 			tab.frame.grid()
-			
+
 			self.current_tab = tab
 		return select
 
