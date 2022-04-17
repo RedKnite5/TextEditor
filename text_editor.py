@@ -1,6 +1,5 @@
 
 
-#import tkinter as tk
 from tkinter import Tk, Frame, Button, Menu, Canvas, Scrollbar
 import tkinter.font as tkFont
 from tkinter import filedialog as FD
@@ -42,7 +41,7 @@ class Tab:
 		self.linenumbers = True
 		yview = self.yview_canvases if self.linenumbers else self.canvas.yview
 
-		self.frame = tk.Frame(self.root)
+		self.frame = Frame(self.root)
 		self.canvas = Canvas(self.frame, highlightthickness=0)
 		self.vbar = Scrollbar(self.frame, orient="vertical", command=yview)
 		self.hbar = Scrollbar(
@@ -73,7 +72,7 @@ class Tab:
 
 		if self.linenumbers:
 			self.linenumber_canvas_width = self.char_width * 5 + 4
-			self.linenumber_canvas = tk.Canvas(
+			self.linenumber_canvas = Canvas(
 				self.frame,
 				width=self.linenumber_canvas_width,
 				highlightthickness=0
