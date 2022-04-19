@@ -731,6 +731,8 @@ class TextEditor:
 		return tab
 
 	def select_tab(self, tab):
+		"""Return a function that will select the tab"""
+
 		def select():
 			"""Set the new current tab and display the new tab's text"""
 
@@ -747,7 +749,12 @@ class TextEditor:
 		return select
 
 	def close_tab(self, tab, button_id):
+		"""Return a function that will close the tab"""
+
 		def close():
+			"""Remove the tab from the list of tabs and destroy the buttons to
+			switch to the tab and set the new current tab"""
+
 			buttons = self.tab_buttons[button_id]
 			buttons[0].pack_forget()
 			buttons[1].pack_forget()
@@ -768,6 +775,8 @@ class TextEditor:
 		return close
 
 	def init_menu(self):
+		"""Create the menu bar and add the menu items"""
+
 		self.menu = Menu(self.root)
 		self.filemenu = Menu(self.menu, tearoff=0)
 		self.filemenu.add_command(label="New                 Ctrl+n", command=self.newfile)
@@ -784,9 +793,14 @@ class TextEditor:
 		self.root.config(menu=self.menu)
 
 	def delegate_to_tab(self, method):
+		"""Return a function that will call the current_tab's method"""
+
 		return lambda: getattr(self.current_tab, method)()
 
 	def save(self, event=None):
+		"""Save the current tab's text to the tab's filename. Call saveas if
+		the tab has no filename."""
+
 		if not self.current_tab.filename:
 			self.saveas(event)
 		else:
@@ -794,6 +808,8 @@ class TextEditor:
 				file.write(self.current_tab.text.get_text())
 
 	def saveas(self, event=None):
+		"""Get the user to select a filename and save the current tab's text"""
+
 		fname = FD.asksaveasfilename(
 			defaultextension=".txt",
 			filetypes=[("Text Files", "*.txt")]
@@ -806,6 +822,9 @@ class TextEditor:
 			file.write(self.current_tab.text.get_text())
 
 	def openfile(self, event=None):
+		"""Get the user to select a filename and open it in a new tab or the
+		current tab if it is empty and has no filename."""
+
 		fname = FD.askopenfilename()
 		if not fname:
 			return
@@ -825,9 +844,13 @@ class TextEditor:
 		self.current_tab.update_cursor()
 
 	def newfile(self, event=None):
+		"""Create a new tab and make it the current tab."""
+
 		self.current_tab = self.create_tab()
 
 	def on_resize(self, event):
+		"""Call resize on all tabs if the window is resized."""
+
 		if event.widget is self.root:
 			if self.window_shape != (event.width, event.height):
 				self.window_shape = (event.width, event.height)
@@ -835,6 +858,9 @@ class TextEditor:
 					self.resize_tab(tab, event.width, event.height)
 
 	def resize_tab(self, tab, width=None, height=None):
+		"""Resize the tab's canvas to the window width and height minus the
+		width and height of other widgets. Also resize the linenumber canvas"""
+
 		if not width or not height:
 			width, height = self.window_shape
 		new_width = width - self.vbar_width - tab.linenumber_canvas_width
@@ -844,6 +870,8 @@ class TextEditor:
 			tab.linenumber_canvas.config(height = new_height)
 
 	def bindings(self):
+		"""Bind editor wide events."""
+
 		bind = self.root.bind
 
 		bind("<Control-s>", self.save)
@@ -854,6 +882,8 @@ class TextEditor:
 		bind("<Configure>", self.on_resize)
 
 	def mainloop(self):
+		"""Start the mainloop."""
+
 		self.root.mainloop()
 
 

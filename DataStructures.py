@@ -14,23 +14,35 @@ __all__ = [
 Point = namedtuple('Point', ['x', 'y'])
 
 class Selection:
+	"""A class representing a selection of text or the start of a selection"""
+
 	def __init__(self, startx=None, starty=None, endx=None, endy=None):
+		"""Create a selection from the given start and end coordinates."""
+
 		self.start = Point(startx, starty)
 		self.end = Point(endx, endy)
 
 	def __bool__(self):
-		"""Return False if all four coordinates are not set"""
+		"""Return True if all four coordinates are set and False otherwise"""
 
 		return (None not in self.start) and (None not in self.end)
 
 	@classmethod
 	def from_start(cls, x, y):
+		"""Create a selection from only the start coordinates. Does not result
+		in a valid selection."""
+
 		return cls(x, y)
 
 	def from_end(self, x2, y2):
+		"""Create a selection from the current start coordinates and the given
+		end coordinates. Does result in a valid selection."""
+
 		return self.__class__(self.start.x, self.start.y, x2, y2)
 
 class SliceDeque(deque):
+	"""A deque that can be sliced"""
+
 	def __getitem__(self, index):
 		if isinstance(index, slice):
 			start = index.start or 0
@@ -65,6 +77,8 @@ class SliceDeque(deque):
 			super().__delitem__(index)
 
 class Coordinate:
+	"""Descriptor to expose the cursor as x and y attributes"""
+
 	def __init__(self, index):
 		self.index = index
 
@@ -75,6 +89,9 @@ class Coordinate:
 		instance.cursor[self.index] = value
 
 class TextArray:
+	"""A class representing a holding the text as a deque of deques. Also keeps
+	track of the current cursor position."""
+
 	x = Coordinate(0)
 	y = Coordinate(1)
 
@@ -89,25 +106,39 @@ class TextArray:
 		return len(self.lines)
 
 	def get_text(self):
+		"""Return the text as a string"""
+
 		return "\n".join("".join(line) for line in self.lines)
 
 	def set_text(self, text):
+		"""Set the text from a string and set the cursor to the beginning of
+		the text"""
+
 		t = text.split("\n")
 		self.lines = SliceDeque([SliceDeque(line) for line in t])
 		self.cursor = [0, 0]
 
 	def current_line(self):
+		"""Return the line the cursor is on as a deque"""
+
 		return self.lines[self.y]
 
 	def insert(self, char):
+		"""Insert the given character at the cursor position"""
+
 		self.current_line().insert(self.x, char)
 		self.x += 1
 
 	def duplicate_line(self):
+		"""Duplicate the line the cursor is on"""
+
 		self.lines.insert(self.y, SliceDeque(self.current_line()))
 		self.y += 1
 
 	def newline(self):
+		"""Insert a newline at the cursor position and move any text after the
+		cursor to the new line"""
+
 		remaining_text = ""
 		if remaining_text := self.current_line()[self.x:]:
 			# TODO: should do differently depending on which side of the line the cursor is closer to
@@ -117,7 +148,11 @@ class TextArray:
 		self.x = 0
 
 	def backspace(self) -> tuple[int]:
-		# return (line number, 0|1|2) if 0, 1, or more than one line needs to be updated
+		"""Delete the character behind the cursor.
+
+		Return (line number, 0|1|2) if 0, 1, or more than one line needs to be
+		updated."""
+
 		if self.x > 0:
 			del self.current_line()[self.x - 1]
 			self.x -= 1
@@ -132,6 +167,11 @@ class TextArray:
 		return (-1, 0)
 
 	def delete(self):
+		"""Delete the character infront of the cursor and return a tuple
+		containing the the line the cursor is on and whether no lines need to
+		be updated, only the current line, or all lines after the current
+		line. (line number, 0|1|2)"""
+
 		if self.x < len(self.current_line()):
 			del self.current_line()[self.x]
 			return (self.y, 1)
