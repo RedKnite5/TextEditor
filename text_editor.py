@@ -1,10 +1,14 @@
 
 
-from tkinter import Tk, Frame, Button, Menu, Canvas, Scrollbar
+from tkinter import (
+	Tk, Frame, Button, Menu, Canvas, Scrollbar, Toplevel, Label, Entry,
+)
 import tkinter.font as tkFont
 from tkinter import filedialog as FD
 
 from string import printable
+
+import pyperclip
 
 from DataStructures import *
 
@@ -14,9 +18,8 @@ from DataStructures import *
 # undo/redo
 # find/replace
 # align text in menu labels
-# variable character width
-# make tab key work
-# dont have cursor toggled of while typing
+# variable character width and make tab key work
+# dont have cursor toggled off while typing
 
 
 # INDEFINATE DELAY:
@@ -35,6 +38,114 @@ class DummyEvent:
 		"""Set all keyword arguments to instance variables"""
 
 		self.__dict__.update(kwargs)
+
+
+class FindReplaceWindow:
+	"""Class to create a window for finding and replacing text"""
+
+	def __init__(
+		self,
+		parent,
+		text_array,
+		highlight,
+		replace,
+		update_cursor,
+		scroll,
+	):
+		self.root = parent
+		self.text_array = text_array
+		self.highlight = highlight
+		self.replace = replace
+		self.update_cursor = update_cursor
+		self.scroll = scroll
+
+		self.win = Toplevel(self.root)
+		self.win.title("Find")
+		self.label = Label(self.win, text="Find:")
+		self.entry = Entry(self.win)
+		self.find_prev = Button(
+			self.win,
+			text="▲",
+			command=self.find_next_or_prev(-1)
+		)
+		self.find_next = Button(
+			self.win,
+			text="▼ Find Next",
+			command=self.find_next_or_prev(1)
+		)
+		self.error_label = Label(self.win, text="")
+
+
+
+		self.label.grid(row=0, column=0)
+		self.entry.grid(row=0, column=1)
+		self.find_prev.grid(row=0, column=2)
+		self.find_next.grid(row=0, column=3)
+		self.error_label.grid(row=2, column=0, columnspan=4)
+
+		self.entry.focus_set()
+
+		self.entry.bind("<Return>", self.find)
+
+		self.find_text = None
+		self.occurances = None
+		self.showing = 0
+	
+	def find_next_or_prev(self, inc):
+		def find_suc(event=None):
+			self.showing += inc
+			if self.showing < 0:
+				self.showing %= len(self.occurances) - 1
+			selection = self.nth_occurance(self.showing)
+			self.highlight(selection)
+
+			self.text_array.x = selection.end.x
+			self.text_array.y = selection.end.y
+			self.scroll()
+			self.update_cursor()
+
+		return find_suc
+
+
+	def find(self, event=None):
+		"""Find the text in the entry box and highlight it on the canvas and set
+		self.occurances to the text separated by the occurances"""
+
+		self.find_text = self.entry.get()
+		if self.find_text == "":
+			return
+		
+		text = self.text_array.get_text()
+
+		self.occurances = text.split(self.find_text)
+		self.showing = -1
+		self.find_next_or_prev(1)()
+
+	def nth_occurance(self, n):
+		"""Return a selection of the nth occurance of the text in the entry box"""
+
+		if n > len(self.occurances) - 2:
+			return None
+
+		occurances_before = self.occurances[:n + 1]
+		text_before = "".join(occurances_before)
+
+		newlines_in_find = self.find_text.count("\n")
+
+		y1 = (newlines_in_find * len(text_before)
+			+ text_before.count("\n"))
+
+		x1 = len(text_before.split("\n")[-1])
+
+		y2 = newlines_in_find + y1
+		if newlines_in_find:
+			x2 = len(self.find_text.split("\n")[-1])
+		else:
+			x2 = x1 + len(self.find_text)
+		
+		return Selection(x1, y1, x2, y2)
+
+
 
 
 class Tab:
@@ -408,24 +519,30 @@ class Tab:
 				else:
 					end = len(self.text[line_number])
 				s += "".join(self.text[line_number][start:end]) + "\n"
-			self.root.clipboard_clear()
-			self.root.clipboard_append(s[:-1])
-			self.root.update()
+			pyperclip.copy(s[:-1])
 
 	def ctrl_v(self, event=None):
 		"""Paste the text from the clipboard into the TextArray"""
 
-		t = self.root.clipboard_get()
-		if not t:
-			if self.selection:
-				self.delete_selection()
-			return
+		t = pyperclip.paste()
+		self.replace(t)
 
-		for char in t:  # simulating keypresses
+	def replace(self, new_text, selection=None):
+		if selection is None:
+			selection = self.selection
+			tmp_sel = None
+		else:
+			tmp_sel = self.selection
+
+		if selection:
+			self.delete_selection()
+
+		for char in new_text:  # simulating keypresses
 			if char == "\n":
 				self.enter_key()
 			else:
 				self.key_press(DummyEvent(char=char))
+		self.selection = tmp_sel
 
 	def ctrl_d(self, event=None):
 		"""Duplicate the current line"""
@@ -446,6 +563,18 @@ class Tab:
 
 		self.selection = Selection(0, 0, len(self.text[-1]), len(self.text) - 1)
 		self.highlight_selection(self.selection)
+
+	def ctrl_f(self, event=None):
+		"""Open find window"""
+
+		self.find_window = FindReplaceWindow(
+			parent=self.root,
+			text_array=self.text,
+			highlight=self.highlight_selection,
+			replace=self.replace,
+			update_cursor=self.update_cursor,
+			scroll=self.scroll_to_see_cursor
+		)
 
 	def mouse_press(self, event):
 		"""Move the cursor and unselect any selected text"""
@@ -506,7 +635,7 @@ class Tab:
 			new_x = (cursor_hpos + self.char_width - can_width) / scrollable_width
 			self.canvas.xview_moveto(new_x)
 		elif cursor_hpos < left_of_screen:
-			new_x = cursor_hpos / scrollable_width
+			new_x = (cursor_hpos - self.char_width) / scrollable_width
 			self.canvas.xview_moveto(new_x)
 
 	def move_cursor(self, xp, yp):
@@ -531,6 +660,8 @@ class Tab:
 
 	def highlight_selection(self, selection):
 		"""Highlight the selected text"""
+
+		self.selection = selection
 
 		if selection.start.y > selection.end.y:
 			selection = Selection(*selection.end, *selection.start)
@@ -576,6 +707,7 @@ class Tab:
 		bind("<Control-d>", self.ctrl_d)
 		bind("<Control-x>", self.ctrl_x)
 		bind("<Control-a>", self.ctrl_a)
+		bind("<Control-f>", self.ctrl_f)
 
 		bind("<Button-1>", self.mouse_press)  # left click
 		bind("<B1-Motion>", self.mouse_move)  # drag mouse while left click
@@ -654,6 +786,24 @@ class TextEditor:
 
 		self.bindings()
 		self.init_menu()
+
+	def init_menu(self):
+		"""Create the menu bar and add the menu items"""
+
+		self.menu = Menu(self.root)
+		self.filemenu = Menu(self.menu, tearoff=0)
+		self.filemenu.add_command(label="New                 Ctrl+n", command=self.newfile)
+		self.filemenu.add_command(label="Open                Ctrl+o", command=self.openfile)
+		self.filemenu.add_command(label="Save                Ctrl+s", command=self.save)
+		self.filemenu.add_command(label="Save as       Ctrl+Shift+s", command=self.saveas)
+		self.menu.add_cascade(label="File", menu=self.filemenu)
+
+		self.editmenu = Menu(self.menu, tearoff=0)
+		self.editmenu.add_command(label="Cut                 Ctrl-x", command=self.delegate_to_tab("ctrl_x"))
+		self.editmenu.add_command(label="Copy                Ctrl-c", command=self.delegate_to_tab("ctrl_c"))
+		self.editmenu.add_command(label="Paste               Ctrl-v", command=self.delegate_to_tab("ctrl_v"))
+		self.menu.add_cascade(label="Edit", menu=self.editmenu)
+		self.root.config(menu=self.menu)
 
 	def tab_row_creation(self):
 		"""Create widgets related to displaying and controlling the different
@@ -773,24 +923,6 @@ class TextEditor:
 					self.newfile()
 
 		return close
-
-	def init_menu(self):
-		"""Create the menu bar and add the menu items"""
-
-		self.menu = Menu(self.root)
-		self.filemenu = Menu(self.menu, tearoff=0)
-		self.filemenu.add_command(label="New                 Ctrl+n", command=self.newfile)
-		self.filemenu.add_command(label="Open                Ctrl+o", command=self.openfile)
-		self.filemenu.add_command(label="Save                Ctrl+s", command=self.save)
-		self.filemenu.add_command(label="Save as       Ctrl+Shift+s", command=self.saveas)
-		self.menu.add_cascade(label="File", menu=self.filemenu)
-
-		self.editmenu = Menu(self.menu, tearoff=0)
-		self.editmenu.add_command(label="Cut                 Ctrl-x", command=self.delegate_to_tab("ctrl_x"))
-		self.editmenu.add_command(label="Copy                Ctrl-c", command=self.delegate_to_tab("ctrl_c"))
-		self.editmenu.add_command(label="Paste               Ctrl-v", command=self.delegate_to_tab("ctrl_v"))
-		self.menu.add_cascade(label="Edit", menu=self.editmenu)
-		self.root.config(menu=self.menu)
 
 	def delegate_to_tab(self, method):
 		"""Return a function that will call the current_tab's method"""
