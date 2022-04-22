@@ -61,6 +61,18 @@ class FindReplaceWindow:
 
 		self.win = Toplevel(self.root)
 		self.win.title("Find")
+
+		self.find_tab = Button(self.win, text="Find", command=self.find_config)
+		self.replace_tab = Button(
+			self.win,
+			text="Replace",
+			command=self.replace_config
+		)
+
+		self.find_tab.grid(row=0, column=0)
+		self.replace_tab.grid(row=0, column=1)
+
+
 		self.label = Label(self.win, text="Find:")
 		self.entry = Entry(self.win)
 		self.find_prev = Button(
@@ -77,11 +89,27 @@ class FindReplaceWindow:
 
 
 
-		self.label.grid(row=0, column=0)
-		self.entry.grid(row=0, column=1)
-		self.find_prev.grid(row=0, column=2)
-		self.find_next.grid(row=0, column=3)
-		self.error_label.grid(row=2, column=0, columnspan=4)
+		self.label.grid(row=1, column=0)
+		self.entry.grid(row=1, column=1)
+		self.find_prev.grid(row=1, column=2)
+		self.find_next.grid(row=1, column=3)
+		self.error_label.grid(row=3, column=0, columnspan=4)
+
+		self.replace_label = Label(self.win, text="Replace with:")
+		self.replace_entry = Entry(self.win)
+		self.replace_but = Button(
+			self.win,
+			text="Replace",
+			command=self.replace_text
+		)
+		self.replace_all_but = Button(
+			self.win,
+			text="Replace All",
+			command=self.replace_all
+		)
+
+
+
 
 		self.entry.focus_set()
 
@@ -90,13 +118,42 @@ class FindReplaceWindow:
 		self.find_text = None
 		self.occurances = None
 		self.showing = 0
+
+	def find_config(self, event=None):
+		self.replace_label.grid_remove()
+		self.replace_entry.grid_remove()
+		self.replace_but.grid_remove()
+		self.replace_all_but.grid_remove()
 	
+	def replace_config(self, event=None):
+		self.replace_label.grid(row=2, column=0)
+		self.replace_entry.grid(row=2, column=1)
+		self.replace_but.grid(row=2, column=2)
+		self.replace_all_but.grid(row=2, column=3)
+
 	def find_next_or_prev(self, inc):
 		def find_suc(event=None):
+
+			if self.find_text != (tmp := self.entry.get()):
+				self.showing = -1
+				self.find_text = tmp
+			if self.find_text == "":
+				return
+
+			text = self.text_array.get_text()
+			self.occurances = text.split(self.find_text)
+
 			self.showing += inc
 			if self.showing < 0:
 				self.showing %= len(self.occurances) - 1
 			selection = self.nth_occurance(self.showing)
+			if selection is None:
+				if self.find_text is None:
+					self.error_label.config(text="No text to find")
+				else:
+					self.error_label.config(text=f"Can not find '{self.find_text}'")
+				return
+			self.error_label.config(text="")
 			self.highlight(selection)
 
 			self.text_array.x = selection.end.x
@@ -105,7 +162,6 @@ class FindReplaceWindow:
 			self.update_cursor()
 
 		return find_suc
-
 
 	def find(self, event=None):
 		"""Find the text in the entry box and highlight it on the canvas and set
@@ -124,7 +180,7 @@ class FindReplaceWindow:
 	def nth_occurance(self, n):
 		"""Return a selection of the nth occurance of the text in the entry box"""
 
-		if n > len(self.occurances) - 2:
+		if n > len(self.occurances or ()) - 2:
 			return None
 
 		occurances_before = self.occurances[:n + 1]
@@ -145,6 +201,11 @@ class FindReplaceWindow:
 		
 		return Selection(x1, y1, x2, y2)
 
+	def replace_text(self):
+		pass
+
+	def replace_all(self):
+		pass
 
 
 
