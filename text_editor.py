@@ -1,5 +1,6 @@
 
 
+from cgitb import text
 from tkinter import (
 	Tk, Frame, Button, Menu, Canvas, Scrollbar, Toplevel, Label, Entry,
 )
@@ -27,6 +28,7 @@ from DataStructures import *
 
 # BUGS:
 # holding down keys can cause the screen not to update
+# ctrl+d doesn't update linenumbers
 
 
 
@@ -75,7 +77,6 @@ class FindReplaceWindow:
 			command=self.find_next_or_prev(1)
 		)
 		self.error_label = Label(self.win, text="")
-
 
 
 		self.label.grid(row=0, column=0)
@@ -166,12 +167,11 @@ class FindReplaceWindow:
 			return None
 
 		occurances_before = self.occurances[:n + 1]
-		text_before = "".join(occurances_before)
+		text_before = self.find_text.join(occurances_before)
 
 		newlines_in_find = self.find_text.count("\n")
 
-		y1 = (newlines_in_find * len(text_before)
-			+ text_before.count("\n"))
+		y1 = text_before.count("\n")
 
 		x1 = len(text_before.split("\n")[-1])
 
