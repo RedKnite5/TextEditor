@@ -105,7 +105,7 @@ class TextArray:
 	def __len__(self):
 		return len(self.lines)
 
-	def get_text(self):
+	def get_text(self) -> str:
 		"""Return the text as a string"""
 
 		return "\n".join("".join(line) for line in self.lines)

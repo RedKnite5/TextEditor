@@ -17,10 +17,14 @@ from DataStructures import *
 # highlight current line
 # dark theme
 # undo/redo
-# find/replace
 # align text in menu labels
-# variable character width and make tab key work
+# variable character width and make tab key work (use binary search to convert canvas coords to index)
 # dont have cursor toggled off while typing
+# find highlights all, but currently selected one is a different color
+# syntax highlighting
+# folding
+# auto indent
+
 
 
 # INDEFINATE DELAY:
@@ -29,7 +33,6 @@ from DataStructures import *
 # BUGS:
 # holding down keys can cause the screen not to update
 # ctrl+d doesn't update linenumbers
-
 
 
 class DummyEvent:
@@ -53,6 +56,7 @@ class FindReplaceWindow:
 		replace,
 		update_cursor,
 		scroll,
+		update_line,
 	):
 		self.root = parent
 		self.text_array = text_array
@@ -60,6 +64,7 @@ class FindReplaceWindow:
 		self.replace = replace
 		self.update_cursor = update_cursor
 		self.scroll = scroll
+		self.update_line = update_line
 
 		self.win = Toplevel(self.root)
 		self.win.title("Find")
@@ -106,7 +111,8 @@ class FindReplaceWindow:
 
 		self.find_text = None
 		self.occurances = None
-		self.showing = 0
+		self.showing = None
+		self.selection = None
 	
 	def replace_config(self, event=None):
 		self.replace_label.grid(row=1, column=0)
@@ -114,29 +120,35 @@ class FindReplaceWindow:
 		self.replace_but.grid(row=1, column=2)
 		self.replace_all_but.grid(row=1, column=3)
 
-	def find_next_or_prev(self, inc):
+	def find_next_or_prev(self, inc, expected=True):
 		def find_suc(event=None):
 
 			if self.find_text != (tmp := self.entry.get()):
 				self.showing = -1
 				self.find_text = tmp
 			if self.find_text == "":
+				self.error_label.config(text="No text to find")
 				return
 
 			text = self.text_array.get_text()
 			self.occurances = text.split(self.find_text)
+			if len(self.occurances) == 1:
+				print("No more occurances")
+
+				if expected:
+					self.error_label.config(text=f"Can not find '{self.find_text}'")
+				self.selection = None
+				self.showing = None
+				return
 
 			self.showing += inc
-			if self.showing < 0:
+			if self.showing < 0 or self.showing > len(self.occurances) - 1:
 				self.showing %= len(self.occurances) - 1
 			selection = self.nth_occurance(self.showing)
-			if selection is None:
-				if self.find_text is None:
-					self.error_label.config(text="No text to find")
-				else:
-					self.error_label.config(text=f"Can not find '{self.find_text}'")
-				return
+			self.selection = selection
+
 			self.error_label.config(text="")
+			print("selection:", selection)
 			self.highlight(selection)
 
 			self.text_array.x = selection.end.x
@@ -184,10 +196,34 @@ class FindReplaceWindow:
 		return Selection(x1, y1, x2, y2)
 
 	def replace_text(self):
-		pass
+		if not self.selection:
+			self.find_next_or_prev(1)()
+
+		if self.selection:
+			text = self.replace_entry.get()
+			self.replace(text, self.selection)
+			self.showing -= 1
+			self.find_next_or_prev(1, expected=False)()
+		else:
+			self.error_label.config(text=f"Can not find '{self.find_text}'")
 
 	def replace_all(self):
-		pass
+		self.find_text = self.entry.get()
+		if self.find_text == "":
+			return
+
+		replace_text = self.replace_entry.get()
+		text = self.text_array.get_text()
+		new_text = text.replace(self.find_text, replace_text)
+		self.text_array.set_text(new_text)
+
+		# TODO: only update lines that changed. also scroll
+		for i in range(0, len(self.text_array)):
+			self.update_line(i)
+		self.update_cursor()
+
+
+
 
 
 
@@ -616,7 +652,8 @@ class Tab:
 			highlight=self.highlight_selection,
 			replace=self.replace,
 			update_cursor=self.update_cursor,
-			scroll=self.scroll_to_see_cursor
+			scroll=self.scroll_to_see_cursor,
+			update_line=self.update_line,
 		)
 
 	def mouse_press(self, event):
