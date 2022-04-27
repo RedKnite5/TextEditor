@@ -133,8 +133,6 @@ class FindReplaceWindow:
 			text = self.text_array.get_text()
 			self.occurances = text.split(self.find_text)
 			if len(self.occurances) == 1:
-				print("No more occurances")
-
 				if expected:
 					self.error_label.config(text=f"Can not find '{self.find_text}'")
 				self.selection = None
@@ -148,7 +146,6 @@ class FindReplaceWindow:
 			self.selection = selection
 
 			self.error_label.config(text="")
-			print("selection:", selection)
 			self.highlight(selection)
 
 			self.text_array.x = selection.end.x
