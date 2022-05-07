@@ -220,10 +220,6 @@ class FindReplaceWindow:
 		self.update_cursor()
 
 
-
-
-
-
 class Tab:
 	def __init__(self, root, filename=None):
 		self.root = root
@@ -264,7 +260,7 @@ class Tab:
 		self.linenumber_canvas_width = 0
 
 		if self.linenumbers:
-			self.linenumber_canvas_width = self.char_width * 5 + 4
+			self.linenumber_canvas_width = self.font.measure("9") * 5 + 4
 			self.linenumber_canvas = Canvas(
 				self.frame,
 				width=self.linenumber_canvas_width,
@@ -284,20 +280,26 @@ class Tab:
 		"""Set infomation about the font and cursor location"""
 
 		self.text_color = "black"
-		self.font_size = 20
-		self.font = tkFont.Font(family="Cascadia Code ExtraLight", size=self.font_size)
-		self.char_width = self.font.measure("A")
+		self.font_size = 12
+		self.font = tkFont.Font(family="courier", size=self.font_size)
 		self.char_height = self.font.metrics("linespace") + 1
 		self.x_offset = 10
 		self.y_offset = 5
 		self.x_cursor_offset = self.x_offset - 2
+		self.tab_width = 4  # 4 spaces per tab
+
+
+		print(self.font.measure("\t", displayof=self.canvas))
+		print(self.font.measure("a\tb"))
+		print(self.font.measure("a   b"))
+		#print(self.font.measure("ab"))
 
 	def init_cursor(self):
 		"""Create the cursor so that it can be moved later and start toggling
 		it"""
 
 		self.cursor_shown = True
-		self.canvas.after(500, self.toggle_cursor)
+		#self.canvas.after(500, self.toggle_cursor)
 		self.canvas.create_line(
 			self.x_cursor_offset,                     # x1
 			self.y_offset,                            # y1
@@ -352,13 +354,25 @@ class Tab:
 			line_number = len(self.text) + 1
 		self.linenumber_canvas.delete("line_num_" + str(line_number))
 
+	def x_pixel_coor(self, x=None, y=None):
+		"""Return the pixel x coordinate of the character at the given position
+		defaults to the current cursor position"""
+
+		if x is None:
+			x = self.text.x
+		if y is None:
+			y = self.text.y
+		t = "".join(self.text[y][:x])
+		return self.font.measure(t)
+
 	def update_cursor(self):
 		"""Move the cursor to the position specified by the TextArray.
-		
+
 		Also set the scrollregion of the canvases to the size of the text."""
+
 		self.canvas.moveto(
 			"cursor",
-			self.text.x * self.char_width + self.x_cursor_offset,
+			self.x_pixel_coor() + self.x_cursor_offset,
 			self.text.y * self.char_height + self.y_offset
 		)
 		self.canvas.config(scrollregion=self.canvas.bbox("all"))   # not entirely sure when this needs to happen
@@ -372,6 +386,9 @@ class Tab:
 
 		self.canvas.delete(f"line_{line_number}")
 		text = "".join(self.text[line_number]) if line_number < len(self.text) else ""
+		# replace tabs with spaces so that it is drawn correctly
+		text = text.replace("\t", " " * self.tab_width)
+
 		# Can't just use itemconfig because it needs to be drawn a first time
 		# Maybe if you add a check to see if it needs to be drawn
 		self.canvas.create_text(
@@ -694,7 +711,13 @@ class Tab:
 		right_of_screen = r * scrollable_width
 
 		cursor_vpos = self.text.y * self.char_height + self.y_offset
-		cursor_hpos = self.text.x * self.char_width + self.x_offset
+		cursor_hpos = self.x_pixel_coor()
+
+		w_width = self.font.measure("W")
+
+		ahead_cursor = cursor_hpos + w_width
+
+		behind_cursor = self.x_pixel_coor(self.text.x - 1 if self.text.x > 0 else 0)
 
 		# max prevents scrolling everytime the canvas bounding box expands
 		if cursor_vpos + 2 * self.char_height > max(bottom_of_screen, can_height):
@@ -708,27 +731,38 @@ class Tab:
 			if self.linenumbers:
 				self.linenumber_canvas.yview_moveto(new_y)
 		
-		if cursor_hpos + self.char_width > max(right_of_screen, can_width):
-			new_x = (cursor_hpos + self.char_width - can_width) / scrollable_width
+		# scroll the width of the previous char
+		if ahead_cursor > max(right_of_screen, can_width):
+			new_x = (ahead_cursor - can_width) / scrollable_width
 			self.canvas.xview_moveto(new_x)
 		elif cursor_hpos < left_of_screen:
-			new_x = (cursor_hpos - self.char_width) / scrollable_width
+			new_x = (behind_cursor) / scrollable_width
 			self.canvas.xview_moveto(new_x)
 
 	def move_cursor(self, xp, yp):
 		"""Convert canvas coordinates to TextArray coordinates and move the
 		TextArray cursor to the new position"""
 
-		x = round((xp - self.x_offset) / self.char_width)
 		y = round((yp - self.y_offset - self.char_height / 2) / self.char_height)
-
 		if y < 0:
 			y = 0
+		elif y >= len(self.text):
+			y = len(self.text) - 1
+
+		# binary search
+		# goes 1 place too far right with thin characters eg: "l"
+		l, r = 0, len(self.text[y]) + 1
+		while l < r:
+			m = (l + r) // 2
+			if xp > self.x_pixel_coor(m, y=y):
+				l = m + 1
+			else:
+				r = m
+		x = r - 1
+
 		if x < 0:
 			x = 0
-		if y >= len(self.text):
-			y = len(self.text) - 1
-		if x > len(self.text[y]):
+		elif x > len(self.text[y]):
 			x = len(self.text[y])
 		self.text.x = x
 		self.text.y = y
@@ -737,6 +771,8 @@ class Tab:
 
 	def highlight_selection(self, selection):
 		"""Highlight the selected text"""
+
+		# TODO: f gets cut off if at the end
 
 		self.selection = selection
 
@@ -749,13 +785,14 @@ class Tab:
 			y1 = line_number * self.char_height + self.y_offset
 			y2 = (line_number + 1) * self.char_height + self.y_offset
 			if line_number == selection.start.y:
-				x1 = selection.start.x * self.char_width + self.x_cursor_offset
+				# + 2 is to account for f being cut off at the end
+				x1 = self.x_pixel_coor(selection.start.x, y=line_number) + self.x_cursor_offset + 2
 			else:
-				x1 = self.x_cursor_offset
+				x1 = self.x_cursor_offset + 2
 			if line_number == selection.end.y:
-				x2 = selection.end.x * self.char_width + self.x_cursor_offset
+				x2 = self.x_pixel_coor(selection.end.x, y=line_number) + self.x_cursor_offset + 2
 			else:
-				x2 = len(self.text[line_number]) * self.char_width + self.x_cursor_offset
+				x2 = self.x_pixel_coor(len(self.text[line_number]), y=line_number) + self.x_cursor_offset + 2
 
 			self.canvas.create_rectangle(
 				x1, y1,
@@ -857,8 +894,8 @@ class TextEditor:
 
 		self.tab_row_creation()
 
-		self.tabs = {}          # id(selection button): Tab
-		self.tab_buttons = {}   # id(selection button): (selection button, close_button)
+		self.tabs = {}          #  id(selection button): Tab
+		self.tab_buttons = {}   #  id(selection button): (selection button, close_button)
 		self.newfile()
 
 		self.bindings()
@@ -1006,6 +1043,12 @@ class TextEditor:
 
 		return lambda: getattr(self.current_tab, method)()
 
+	def tab_key(self, event):
+		"""Stop the tab from changing the focus on the main window. Tab will
+		also call key_press which will handle the tab"""
+
+		return "break"
+
 	def save(self, event=None):
 		"""Save the current tab's text to the tab's filename. Call saveas if
 		the tab has no filename."""
@@ -1082,6 +1125,10 @@ class TextEditor:
 		"""Bind editor wide events."""
 
 		bind = self.root.bind
+
+		self.root.unbind_all("<Tab>")
+
+		bind("<Tab>", self.tab_key)
 
 		bind("<Control-s>", self.save)
 		bind("<Control-S>", self.saveas)  # capital s
