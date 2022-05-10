@@ -34,7 +34,7 @@ from DataStructures import *
 
 class DummyEvent:
 	"""Class to mimic events for fuctions that are bound to an event and
-	are called independently"""
+	are also called independently"""
 
 	def __init__(self, **kwargs):
 		"""Set all keyword arguments to instance variables"""
