@@ -29,7 +29,6 @@ from DataStructures import *
 
 # BUGS:
 # holding down keys can cause the screen not to update
-# ctrl+d doesn't update linenumbers
 
 
 class DummyEvent:
