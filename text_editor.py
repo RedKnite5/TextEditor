@@ -636,6 +636,11 @@ class Tab:
 			self.update_line(i)
 		self.update_cursor()
 
+		if self.linenumbers:
+			self.create_line_number(len(self.text))
+
+		self.scroll_to_see_cursor()
+
 	def ctrl_x(self, event=None):
 		"""Cut the selected text to the clipboard"""
 
