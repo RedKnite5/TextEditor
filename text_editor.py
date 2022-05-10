@@ -1,6 +1,4 @@
 
-
-from cgitb import text
 from tkinter import (
 	Tk, Frame, Button, Menu, Canvas, Scrollbar, Toplevel, Label, Entry,
 )
@@ -24,7 +22,6 @@ from DataStructures import *
 # syntax highlighting
 # folding
 # auto indent
-
 
 
 # INDEFINATE DELAY:
@@ -288,12 +285,6 @@ class Tab:
 		self.x_cursor_offset = self.x_offset - 2
 		self.tab_width = 4  # 4 spaces per tab
 
-
-		print(self.font.measure("\t", displayof=self.canvas))
-		print(self.font.measure("a\tb"))
-		print(self.font.measure("a   b"))
-		#print(self.font.measure("ab"))
-
 	def init_cursor(self):
 		"""Create the cursor so that it can be moved later and start toggling
 		it"""
@@ -362,7 +353,7 @@ class Tab:
 			x = self.text.x
 		if y is None:
 			y = self.text.y
-		t = "".join(self.text[y][:x])
+		t = "".join(self.text[y][:x]).replace("\t", " " * self.tab_width)
 		return self.font.measure(t)
 
 	def update_cursor(self):
