@@ -1,6 +1,7 @@
 
 from tkinter import (
 	Tk, Frame, Button, Menu, Canvas, Scrollbar, Toplevel, Label, Entry,
+	StringVar
 )
 import tkinter.font as tkFont
 from tkinter import filedialog as FD
@@ -66,7 +67,10 @@ class FindReplaceWindow:
 		self.win.title("Find")
 
 		self.label = Label(self.win, text="Find:")
-		self.entry = Entry(self.win)
+
+		self.sv = StringVar()
+		self.sv.trace_add("write", callback=self.find)
+		self.entry = Entry(self.win, textvariable=self.sv)
 		self.find_prev = Button(
 			self.win,
 			text="▲",
@@ -151,9 +155,11 @@ class FindReplaceWindow:
 
 		return find_suc
 
-	def find(self, event=None):
+	def find(self, event=None, *args):
 		"""Find the text in the entry box and highlight it on the canvas and set
 		self.occurances to the text separated by the occurances"""
+
+		# *args absorbs arguments from the StringVar trace callback
 
 		self.find_text = self.entry.get()
 		if self.find_text == "":
@@ -162,8 +168,16 @@ class FindReplaceWindow:
 		text = self.text_array.get_text()
 
 		self.occurances = text.split(self.find_text)
+		self.highlight_all()
 		self.showing = -1
 		self.find_next_or_prev(1)()
+
+	def highlight_all(self):
+
+		selections = [self.nth_occurance(i) for i in range(len(self.occurances)-1)]
+		for sel in selections:
+			self.highlight(sel, "general_find_color")
+
 
 	def nth_occurance(self, n):
 		"""Return a selection of the nth occurance of the text in the entry box"""
@@ -246,7 +260,10 @@ class Tab:
 		)
 		self.canvas.config(scrollregion=self.canvas.bbox("all"))
 
-		self.highlight_color = "light blue"
+		self.highlight_colors = {
+			"selected_color": "light blue",
+			"general_find_color": "orange"
+		}
 		self.set_font_info()
 
 		self.selection = None
@@ -764,23 +781,25 @@ class Tab:
 		self.update_cursor()
 		return x, y
 
-	def highlight_selection(self, selection):
+	def highlight_selection(self, selection, color_select="selected_color"):
 		"""Highlight the selected text"""
 
 		# TODO: f gets cut off if at the end
 
 		self.selection = selection
+		print(selection)
 
 		if selection.start.y > selection.end.y:
 			selection = Selection(*selection.end, *selection.start)
 
-		self.canvas.delete("selection")
+		color = self.highlight_colors[color_select]
+		self.canvas.delete("specific_select")
 
 		for line_number in range(selection.start.y, selection.end.y + 1):
 			y1 = line_number * self.char_height + self.y_offset
 			y2 = (line_number + 1) * self.char_height + self.y_offset
 			if line_number == selection.start.y:
-				# + 2 is to account for f being cut off at the end
+				# + 2 is to account for 'f' being cut off at the end
 				x1 = self.x_pixel_coor(selection.start.x, y=line_number) + self.x_cursor_offset + 2
 			else:
 				x1 = self.x_cursor_offset + 2
@@ -789,11 +808,16 @@ class Tab:
 			else:
 				x2 = self.x_pixel_coor(len(self.text[line_number]), y=line_number) + self.x_cursor_offset + 2
 
+			tags = "selection"
+			if color_select == "selected_color":
+				# differentiate highlighting of all matching text and what is currently selected
+				tags += " specific_select"
+
 			self.canvas.create_rectangle(
 				x1, y1,
 				x2, y2,
-				fill=self.highlight_color,
-				tag="selection"
+				fill=color,
+				tag=tags
 			)
 			self.canvas.lower("selection")
 

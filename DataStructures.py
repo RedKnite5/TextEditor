@@ -27,6 +27,9 @@ class Selection:
 
 		return (None not in self.start) and (None not in self.end)
 
+	def __str__(self):
+		return f"{self.start} to {self.end}"
+
 	@classmethod
 	def from_start(cls, x, y):
 		"""Create a selection from only the start coordinates. Does not result
